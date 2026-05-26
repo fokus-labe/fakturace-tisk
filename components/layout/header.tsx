@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut } from "lucide-react";
+import { ChevronDown, LogOut, Settings } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
@@ -56,6 +57,11 @@ export function Header({ email }: HeaderProps) {
           <ChevronDown className="size-4 text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" sideOffset={6}>
+          <DropdownMenuItem onClick={() => router.push("/settings")}>
+            <Settings className="size-4 mr-2" />
+            Nastavení
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={signOut}>
             <LogOut className="size-4 mr-2" />
             Odhlásit
