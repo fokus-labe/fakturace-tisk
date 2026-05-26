@@ -76,11 +76,38 @@ export async function DELETE(
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Načti fakturu kvůli pdf_url a statusu
+  const { data: invoice, error: fetchErr } = await supabase
+    .from("received_invoices")
+    .select("id, status, pdf_url")
+    .eq("id", id)
+    .single();
+  if (fetchErr || !invoice)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // U přijatých povolíme jen draft a cancelled
+  if (invoice.status !== "draft" && invoice.status !== "cancelled") {
+    return NextResponse.json(
+      {
+        error:
+          "Lze smazat jen koncepty a zrušené faktury. Použij Zrušit místo smazání.",
+      },
+      { status: 409 },
+    );
+  }
+
+  // Smaž PDF ze storage, pokud existuje (ignoruj chyby)
+  if (invoice.pdf_url) {
+    const path = invoice.pdf_url.replace(/^supplier-invoices\//, "");
+    await supabase.storage.from("supplier-invoices").remove([path]);
+  }
+
   const { error } = await supabase
     .from("received_invoices")
     .delete()
     .eq("id", id);
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+
+  return new NextResponse(null, { status: 204 });
 }

@@ -1,11 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export interface CashflowPoint {
+export interface CashflowSeriesPoint {
   month: string;
-  received_with_vat: number;
-  received_no_vat: number;
-  issued_with_vat: number;
-  issued_no_vat: number;
+  received: number;
+  issued: number;
 }
 
 export interface TopEntry {
@@ -26,7 +24,8 @@ export interface DashboardStats {
     unpaidReceived: { count: number; total: number };
     atAccountant: { count: number };
   };
-  cashflow12months: CashflowPoint[];
+  cashflowWithVat: CashflowSeriesPoint[];
+  cashflowNoVat: CashflowSeriesPoint[];
   topSuppliers: TopEntry[];
   topClients: TopEntry[];
 }
@@ -124,7 +123,14 @@ export async function getDashboardStats(
   }>;
 
   // === Cashflow per month ===
-  const months = new Map<string, CashflowPoint>();
+  interface MonthBucket {
+    month: string;
+    received_with_vat: number;
+    received_no_vat: number;
+    issued_with_vat: number;
+    issued_no_vat: number;
+  }
+  const months = new Map<string, MonthBucket>();
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -163,15 +169,17 @@ export async function getDashboardStats(
     point.issued_with_vat += noVat + vat;
   }
 
-  const cashflow12months: CashflowPoint[] = Array.from(months.values()).map(
-    (m) => ({
-      month: m.month,
-      received_with_vat: round2(m.received_with_vat),
-      received_no_vat: round2(m.received_no_vat),
-      issued_with_vat: round2(m.issued_with_vat),
-      issued_no_vat: round2(m.issued_no_vat),
-    }),
-  );
+  const bucketArr = Array.from(months.values());
+  const cashflowWithVat: CashflowSeriesPoint[] = bucketArr.map((m) => ({
+    month: m.month,
+    received: round2(m.received_with_vat),
+    issued: round2(m.issued_with_vat),
+  }));
+  const cashflowNoVat: CashflowSeriesPoint[] = bucketArr.map((m) => ({
+    month: m.month,
+    received: round2(m.received_no_vat),
+    issued: round2(m.issued_no_vat),
+  }));
 
   // === Period aggregates ===
   function aggregateReceived(start: string, end: string) {
@@ -303,7 +311,8 @@ export async function getDashboardStats(
         count: (pendingAtAccountant ?? []).length,
       },
     },
-    cashflow12months,
+    cashflowWithVat,
+    cashflowNoVat,
     topSuppliers,
     topClients,
   };

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Archive, Ban, Check, FileCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -15,6 +14,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { DeleteButton } from "@/components/ui/delete-button";
+import {
+  DatePicker,
+  dateToIso,
+  isoToDate,
+} from "@/components/ui/date-picker";
 import { formatDateInput } from "@/lib/utils/format";
 import type { ReceivedInvoiceStatus } from "@/types/received-invoice";
 
@@ -58,6 +63,8 @@ export function ReceivedInvoiceActions({
   const canPay = status === "entered";
   const canArchive = status === "paid";
   const canCancel = status !== "cancelled" && status !== "archived";
+  // Smazat: jen draft a cancelled (API to také vynucuje)
+  const canDelete = status === "draft" || status === "cancelled";
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -92,11 +99,9 @@ export function ReceivedInvoiceActions({
             </DialogHeader>
             <div className="space-y-1.5">
               <Label htmlFor="paid-date">Datum platby *</Label>
-              <Input
-                id="paid-date"
-                type="date"
-                value={paidDate}
-                onChange={(e) => setPaidDate(e.target.value)}
+              <DatePicker
+                value={isoToDate(paidDate)}
+                onChange={(d) => setPaidDate(dateToIso(d))}
               />
             </div>
             <DialogFooter>
@@ -179,6 +184,17 @@ export function ReceivedInvoiceActions({
           <Ban className="size-4 mr-2" />
           Zrušit
         </Button>
+      ) : null}
+
+      {canDelete ? (
+        <div className="ml-auto">
+          <DeleteButton
+            endpoint={`/api/received-invoices/${invoiceId}`}
+            redirectTo="/received-invoices"
+            description="Faktura bude trvale odstraněna ze systému včetně PDF přílohy. Tato akce je nevratná."
+            successMessage="Faktura smazána"
+          />
+        </div>
       ) : null}
     </div>
   );

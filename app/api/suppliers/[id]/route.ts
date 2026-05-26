@@ -76,8 +76,27 @@ export async function DELETE(
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Zkontroluj, jestli má dodavatel nějaké přijaté faktury
+  const { count, error: countErr } = await supabase
+    .from("received_invoices")
+    .select("id", { count: "exact", head: true })
+    .eq("supplier_id", id);
+  if (countErr)
+    return NextResponse.json({ error: countErr.message }, { status: 500 });
+
+  if ((count ?? 0) > 0) {
+    return NextResponse.json(
+      {
+        error: `Dodavatel má ${count} přijatých faktur, nelze smazat. Nejprve smaž faktury.`,
+        count,
+      },
+      { status: 409 },
+    );
+  }
+
   const { error } = await supabase.from("suppliers").delete().eq("id", id);
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+
+  return new NextResponse(null, { status: 204 });
 }

@@ -2,13 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { format, parseISO } from "date-fns";
-import { cs } from "date-fns/locale";
 import {
   AlertTriangle,
   ArrowDownCircle,
   ArrowUpCircle,
-  CalendarIcon,
   Download,
   History,
   Loader2,
@@ -16,13 +13,8 @@ import {
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar } from "@/components/ui/calendar";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -109,31 +101,7 @@ function DatePickerField({
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
-      <Popover>
-        <PopoverTrigger
-          render={
-            <Button
-              type="button"
-              variant="outline"
-              className={cn(
-                "w-full justify-start text-left font-normal",
-                !value && "text-muted-foreground",
-              )}
-            />
-          }
-        >
-          <CalendarIcon className="size-4 mr-2" />
-          {value ? format(value, "d. M. yyyy", { locale: cs }) : "Vyber datum"}
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            mode="single"
-            selected={value}
-            onSelect={onChange}
-            autoFocus
-          />
-        </PopoverContent>
-      </Popover>
+      <DatePicker value={value ?? null} onChange={onChange} />
     </div>
   );
 }

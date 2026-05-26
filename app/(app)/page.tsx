@@ -234,7 +234,10 @@ export default async function Dashboard() {
         </div>
       </section>
 
-      <CashflowChart data={stats.cashflow12months} />
+      <CashflowChart
+        dataWithVat={stats.cashflowWithVat}
+        dataNoVat={stats.cashflowNoVat}
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border">

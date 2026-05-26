@@ -26,6 +26,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { DeleteButton } from "@/components/ui/delete-button";
+import {
+  DatePicker,
+  dateToIso,
+  isoToDate,
+} from "@/components/ui/date-picker";
 import { formatDateInput } from "@/lib/utils/format";
 import type { InvoiceStatus } from "@/types/invoice";
 
@@ -148,6 +154,11 @@ export function InvoiceActions({
   const canMarkIssued = status === "sent_to_accountant";
   const canArchive = status === "invoice_issued";
   const canCancel = status !== "cancelled" && status !== "archived";
+  // Smazat: jen draft, sent_to_accountant, cancelled — NIKDY invoice_issued / archived
+  const canDelete =
+    status === "draft" ||
+    status === "sent_to_accountant" ||
+    status === "cancelled";
 
   return (
     <div className="space-y-4">
@@ -205,11 +216,9 @@ export function InvoiceActions({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="issued-date">Datum vystavení *</Label>
-                  <Input
-                    id="issued-date"
-                    type="date"
-                    value={issuedDate}
-                    onChange={(e) => setIssuedDate(e.target.value)}
+                  <DatePicker
+                    value={isoToDate(issuedDate)}
+                    onChange={(d) => setIssuedDate(dateToIso(d))}
                   />
                 </div>
               </div>
@@ -267,6 +276,17 @@ export function InvoiceActions({
             <Ban className="size-4 mr-2" />
             Zrušit
           </Button>
+        ) : null}
+
+        {canDelete ? (
+          <div className="ml-auto">
+            <DeleteButton
+              endpoint={`/api/invoice-requests/${invoiceId}`}
+              redirectTo="/invoices"
+              description="Faktura bude trvale odstraněna ze systému včetně PDF podkladu. Tato akce je nevratná."
+              successMessage="Faktura smazána"
+            />
+          </div>
         ) : null}
       </div>
 

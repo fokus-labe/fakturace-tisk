@@ -1,34 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { formatCZK } from "@/lib/utils/format";
 
-interface CashflowPoint {
-  month: string;
-  received_with_vat: number;
-  received_no_vat: number;
-  issued_with_vat: number;
-  issued_no_vat: number;
+interface CashflowDataPoint {
+  month: string; // "2026-05"
+  received: number;
+  issued: number;
 }
 
-interface Props {
-  data: CashflowPoint[];
+interface CashflowChartProps {
+  dataWithVat: CashflowDataPoint[];
+  dataNoVat: CashflowDataPoint[];
 }
 
-const CZ_MONTHS = [
+const MONTH_LABELS_CZ = [
   "Led",
   "Úno",
   "Bře",
@@ -43,118 +30,242 @@ const CZ_MONTHS = [
   "Pro",
 ];
 
-function formatMonth(key: string): string {
-  const [, m] = key.split("-");
-  const idx = Number(m) - 1;
-  return CZ_MONTHS[idx] ?? key;
+const WIDTH = 800;
+const HEIGHT = 300;
+const PAD = { top: 20, right: 30, bottom: 40, left: 60 };
+const CHART_W = WIDTH - PAD.left - PAD.right;
+const CHART_H = HEIGHT - PAD.top - PAD.bottom;
+
+function formatAxisCZK(val: number): string {
+  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000) return `${Math.round(val / 1_000)}k`;
+  return val.toString();
 }
 
-function formatAxisCZK(v: number): string {
-  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(v) >= 1_000) return `${Math.round(v / 1_000)}k`;
-  return String(v);
+function monthLabel(key: string): string {
+  const m = Number(key.split("-")[1]) - 1;
+  return MONTH_LABELS_CZ[m] ?? key;
 }
 
-export function CashflowChart({ data }: Props) {
-  const [withVat, setWithVat] = useState(true);
+export function CashflowChart({
+  dataWithVat,
+  dataNoVat,
+}: CashflowChartProps) {
+  const [showWithVat, setShowWithVat] = useState(true);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
-  const chartData = data.map((d) => ({
-    label: formatMonth(d.month),
-    Příjmy: withVat ? d.issued_with_vat : d.issued_no_vat,
-    Výdaje: withVat ? d.received_with_vat : d.received_no_vat,
-  }));
+  const data = showWithVat ? dataWithVat : dataNoVat;
+
+  const { maxValue, yTicks } = useMemo(() => {
+    const allValues = data.flatMap((d) => [d.received, d.issued]);
+    const max = Math.max(...allValues, 1000);
+    const niceMax = Math.ceil((max * 1.1) / 1000) * 1000;
+    return {
+      maxValue: niceMax,
+      yTicks: [0, 0.25, 0.5, 0.75, 1].map((t) => niceMax * t),
+    };
+  }, [data]);
+
+  const yScale = (val: number) => CHART_H - (val / maxValue) * CHART_H;
+  const xScale = (idx: number) =>
+    data.length > 1 ? (idx / (data.length - 1)) * CHART_W : CHART_W / 2;
+
+  const issuedPath = data
+    .map(
+      (d, i) =>
+        `${i === 0 ? "M" : "L"}${xScale(i)},${yScale(d.issued)}`,
+    )
+    .join(" ");
+  const receivedPath = data
+    .map(
+      (d, i) =>
+        `${i === 0 ? "M" : "L"}${xScale(i)},${yScale(d.received)}`,
+    )
+    .join(" ");
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-        <CardTitle className="text-base">Cashflow 12 měsíců</CardTitle>
-        <div className="flex rounded-md border bg-muted/30 p-0.5 text-xs">
-          <Button
+    <div className="rounded-lg border bg-card p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base font-semibold">Cashflow 12 měsíců</h3>
+        <div className="flex items-center gap-1 text-xs">
+          <button
             type="button"
-            variant={withVat ? "default" : "ghost"}
-            size="sm"
-            className={cn("h-7 px-2.5", withVat && "shadow-sm")}
-            onClick={() => setWithVat(true)}
+            onClick={() => setShowWithVat(true)}
+            className={cn(
+              "px-3 py-1 rounded-md transition-colors",
+              showWithVat
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted",
+            )}
           >
             S DPH
-          </Button>
-          <Button
+          </button>
+          <button
             type="button"
-            variant={!withVat ? "default" : "ghost"}
-            size="sm"
-            className={cn("h-7 px-2.5", !withVat && "shadow-sm")}
-            onClick={() => setWithVat(false)}
+            onClick={() => setShowWithVat(false)}
+            className={cn(
+              "px-3 py-1 rounded-md transition-colors",
+              !showWithVat
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted",
+            )}
           >
             Bez DPH
-          </Button>
+          </button>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="h-[280px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={chartData}
-              margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
+      </div>
+
+      <div className="flex items-center gap-6 mb-2 text-xs">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-sm bg-emerald-500" />
+          <span className="text-muted-foreground">Příjmy</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-sm bg-red-500" />
+          <span className="text-muted-foreground">Výdaje</span>
+        </div>
+      </div>
+
+      <div className="relative">
+        <svg
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          className="w-full h-auto"
+          preserveAspectRatio="xMidYMid meet"
+          onMouseLeave={() => setHoveredIdx(null)}
+        >
+          {/* Grid + Y labels */}
+          {yTicks.map((tick, i) => (
+            <g key={i}>
+              <line
+                x1={PAD.left}
+                x2={PAD.left + CHART_W}
+                y1={PAD.top + yScale(tick)}
+                y2={PAD.top + yScale(tick)}
+                stroke="#E5E5E5"
+                strokeDasharray="2,2"
+              />
+              <text
+                x={PAD.left - 8}
+                y={PAD.top + yScale(tick) + 4}
+                fontSize="11"
+                fill="#737373"
+                textAnchor="end"
+                fontFamily="var(--font-mono)"
+              >
+                {formatAxisCZK(tick)}
+              </text>
+            </g>
+          ))}
+
+          {/* X axis labels */}
+          {data.map((d, i) => (
+            <text
+              key={i}
+              x={PAD.left + xScale(i)}
+              y={HEIGHT - 15}
+              fontSize="11"
+              fill="#737373"
+              textAnchor="middle"
             >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="var(--color-border)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
-                tickLine={false}
-                axisLine={{ stroke: "var(--color-border)" }}
-              />
-              <YAxis
-                tickFormatter={formatAxisCZK}
-                tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
-                tickLine={false}
-                axisLine={false}
-                width={56}
-              />
-              <Tooltip
-                formatter={(value) => formatCZK(Number(value ?? 0))}
-                labelFormatter={(label) => `Měsíc: ${label}`}
-                contentStyle={{
-                  background: "#FFFFFF",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  fontFamily: "var(--font-mono)",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                }}
-                labelStyle={{
-                  fontFamily: "var(--font-sans)",
-                  color: "var(--color-muted-foreground)",
-                  marginBottom: 4,
-                }}
-              />
-              <Legend
-                wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-                iconType="line"
-              />
-              <Line
-                type="monotone"
-                dataKey="Příjmy"
-                stroke="#10B981"
-                strokeWidth={2}
-                dot={{ r: 3, fill: "#10B981" }}
-                activeDot={{ r: 5 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="Výdaje"
-                stroke="#EF4444"
-                strokeWidth={2}
-                dot={{ r: 3, fill: "#EF4444" }}
-                activeDot={{ r: 5 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
+              {monthLabel(d.month)}
+            </text>
+          ))}
+
+          {/* Lines and dots */}
+          <g transform={`translate(${PAD.left},${PAD.top})`}>
+            <path
+              d={receivedPath}
+              fill="none"
+              stroke="#EF4444"
+              strokeWidth="2"
+            />
+            <path
+              d={issuedPath}
+              fill="none"
+              stroke="#10B981"
+              strokeWidth="2"
+            />
+
+            {data.map((d, i) => (
+              <g key={i}>
+                <rect
+                  x={xScale(i) - 20}
+                  y={0}
+                  width={40}
+                  height={CHART_H}
+                  fill="transparent"
+                  onMouseEnter={() => setHoveredIdx(i)}
+                  style={{ cursor: "crosshair" }}
+                />
+                <circle
+                  cx={xScale(i)}
+                  cy={yScale(d.received)}
+                  r={hoveredIdx === i ? 5 : 3}
+                  fill="#EF4444"
+                  pointerEvents="none"
+                />
+                <circle
+                  cx={xScale(i)}
+                  cy={yScale(d.issued)}
+                  r={hoveredIdx === i ? 5 : 3}
+                  fill="#10B981"
+                  pointerEvents="none"
+                />
+
+                {hoveredIdx === i ? (
+                  <line
+                    x1={xScale(i)}
+                    x2={xScale(i)}
+                    y1={0}
+                    y2={CHART_H}
+                    stroke="#737373"
+                    strokeDasharray="2,2"
+                    strokeWidth="1"
+                    pointerEvents="none"
+                  />
+                ) : null}
+              </g>
+            ))}
+          </g>
+        </svg>
+
+        {hoveredIdx !== null && data[hoveredIdx] ? (
+          <div
+            className="absolute bg-card border rounded-md shadow-lg p-3 text-xs pointer-events-none"
+            style={{
+              left: `${((PAD.left + xScale(hoveredIdx)) / WIDTH) * 100}%`,
+              top: "10px",
+              transform: "translateX(-50%)",
+              minWidth: "160px",
+            }}
+          >
+            <div className="font-medium mb-2">
+              {(() => {
+                const [year, m] = data[hoveredIdx].month.split("-");
+                return `${MONTH_LABELS_CZ[Number(m) - 1]} ${year}`;
+              })()}
+            </div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <div className="w-2 h-2 rounded-sm bg-emerald-500" />
+                Příjmy
+              </span>
+              <span className="font-mono tabular-nums">
+                {formatCZK(data[hoveredIdx].issued)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <div className="w-2 h-2 rounded-sm bg-red-500" />
+                Výdaje
+              </span>
+              <span className="font-mono tabular-nums">
+                {formatCZK(data[hoveredIdx].received)}
+              </span>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }

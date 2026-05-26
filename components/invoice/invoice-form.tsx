@@ -26,27 +26,35 @@ import {
 } from "./invoice-form-schema";
 import { calculateInvoiceTotals } from "@/lib/utils/vat";
 import { formatCZK, formatDateInput } from "@/lib/utils/format";
+import {
+  DatePicker,
+  dateToIso,
+  isoToDate,
+} from "@/components/ui/date-picker";
+import { ClientCreateDialog } from "@/components/client/client-create-dialog";
 import type { Client, IssuedPaymentMethod } from "@/types/invoice";
 
+type ClientLite = Pick<Client, "id" | "name">;
+
 interface Props {
-  clients: Pick<Client, "id" | "name">[];
+  clients: ClientLite[];
 }
 
 const NEW_CLIENT_VALUE = "__new__";
 
-const PAYMENT_METHOD_OPTIONS: { value: IssuedPaymentMethod; label: string }[] = [
-  { value: "fakturace", label: "Fakturace" },
-  { value: "hotovost", label: "Hotovost" },
-  { value: "karta", label: "Karta" },
-  { value: "QR", label: "QR" },
-];
+const PAYMENT_METHOD_OPTIONS: { value: IssuedPaymentMethod; label: string }[] =
+  [
+    { value: "fakturace", label: "Fakturace" },
+    { value: "hotovost", label: "Hotovost" },
+    { value: "karta", label: "Karta" },
+    { value: "QR", label: "QR" },
+  ];
 
 export function InvoiceForm({ clients }: Props) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
-  const [clientChoice, setClientChoice] = useState<string>(
-    clients[0]?.id ?? NEW_CLIENT_VALUE,
-  );
+  const [clientList, setClientList] = useState<ClientLite[]>(clients);
+  const [clientDialogOpen, setClientDialogOpen] = useState(false);
 
   const form = useForm<InvoiceFormInput, unknown, InvoiceFormOutput>({
     resolver: zodResolver(invoiceFormSchema),
@@ -54,9 +62,7 @@ export function InvoiceForm({ clients }: Props) {
       client_id: clients[0]?.id ?? "",
       issued_at: formatDateInput(new Date()),
       payment_method: "fakturace",
-      due_date: formatDateInput(
-        new Date(Date.now() + 14 * 24 * 3600 * 1000),
-      ),
+      due_date: formatDateInput(new Date(Date.now() + 14 * 24 * 3600 * 1000)),
       short_description: "",
       items: [
         { description: "", quantity: 1, unit_price_no_vat: 0, vat_rate: 21 },
@@ -84,39 +90,19 @@ export function InvoiceForm({ clients }: Props) {
 
   const clientNameById = useMemo(() => {
     const map = new Map<string, string>();
-    for (const c of clients) map.set(c.id, c.name);
+    for (const c of clientList) map.set(c.id, c.name);
     return map;
-  }, [clients]);
-
-  function handleClientChange(value: string | null) {
-    const v = value ?? NEW_CLIENT_VALUE;
-    setClientChoice(v);
-    if (v === NEW_CLIENT_VALUE) setValue("client_id", "");
-    else setValue("client_id", v);
-  }
+  }, [clientList]);
 
   async function onSubmit(values: InvoiceFormOutput) {
     setSubmitting(true);
-    const usingNew = clientChoice === NEW_CLIENT_VALUE;
-    if (usingNew && !values.new_client_name) {
-      toast.error("Vyplň jméno nového klienta");
+    if (!values.client_id) {
+      toast.error("Vyber klienta");
       setSubmitting(false);
       return;
     }
     const payload = {
-      client_id: usingNew ? undefined : values.client_id || undefined,
-      new_client: usingNew
-        ? {
-            name: values.new_client_name!,
-            ico: values.new_client_ico || null,
-            dic: values.new_client_dic || null,
-            email: values.new_client_email || null,
-            address_street: values.new_client_street || null,
-            address_city: values.new_client_city || null,
-            address_zip: values.new_client_zip || null,
-            address_country: "Česká republika",
-          }
-        : undefined,
+      client_id: values.client_id,
       issued_at: values.issued_at,
       due_date: values.due_date || null,
       variable_symbol: values.variable_symbol || undefined,
@@ -151,66 +137,55 @@ export function InvoiceForm({ clients }: Props) {
         <CardHeader>
           <CardTitle className="text-base">Odběratel</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Klient</Label>
-            <Select value={clientChoice} onValueChange={handleClientChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {(value: string | null) => {
-                    if (!value) return "Vyber klienta…";
-                    if (value === NEW_CLIENT_VALUE) return "+ Nový klient…";
-                    return clientNameById.get(value) ?? value;
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
+        <CardContent className="space-y-2">
+          <Label>Klient *</Label>
+          <Controller
+            control={control}
+            name="client_id"
+            render={({ field }) => (
+              <Select
+                value={field.value || ""}
+                onValueChange={(v) => {
+                  if (v === NEW_CLIENT_VALUE) {
+                    setClientDialogOpen(true);
+                    return;
+                  }
+                  field.onChange(v ?? "");
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {(value: string | null) => {
+                      if (!value) return "Vyber klienta…";
+                      return clientNameById.get(value) ?? value;
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {clientList.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={NEW_CLIENT_VALUE}>
+                    + Vytvořit nového klienta
                   </SelectItem>
-                ))}
-                <SelectItem value={NEW_CLIENT_VALUE}>
-                  + Nový klient…
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {clientChoice === NEW_CLIENT_VALUE ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1.5 md:col-span-2">
-                <Label>Jméno / název *</Label>
-                <Input {...register("new_client_name")} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>IČO</Label>
-                <Input {...register("new_client_ico")} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>DIČ</Label>
-                <Input {...register("new_client_dic")} />
-              </div>
-              <div className="space-y-1.5 md:col-span-2">
-                <Label>Email</Label>
-                <Input type="email" {...register("new_client_email")} />
-              </div>
-              <div className="space-y-1.5 md:col-span-2">
-                <Label>Ulice</Label>
-                <Input {...register("new_client_street")} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>PSČ</Label>
-                <Input {...register("new_client_zip")} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Město</Label>
-                <Input {...register("new_client_city")} />
-              </div>
-            </div>
-          ) : null}
+                </SelectContent>
+              </Select>
+            )}
+          />
         </CardContent>
       </Card>
+
+      <ClientCreateDialog
+        open={clientDialogOpen}
+        onOpenChange={setClientDialogOpen}
+        onCreated={(c) => {
+          setClientList((prev) => [...prev, { id: c.id, name: c.name }]);
+          setValue("client_id", c.id);
+          router.refresh();
+        }}
+      />
 
       <Card>
         <CardHeader>
@@ -250,7 +225,16 @@ export function InvoiceForm({ clients }: Props) {
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>Datum vystavení *</Label>
-            <Input type="date" {...register("issued_at")} />
+            <Controller
+              control={control}
+              name="issued_at"
+              render={({ field }) => (
+                <DatePicker
+                  value={isoToDate(field.value)}
+                  onChange={(d) => field.onChange(dateToIso(d))}
+                />
+              )}
+            />
             {errors.issued_at ? (
               <p className="text-xs text-destructive">
                 {errors.issued_at.message}
@@ -259,12 +243,22 @@ export function InvoiceForm({ clients }: Props) {
           </div>
           <div className="space-y-1.5">
             <Label>Splatnost</Label>
-            <Input type="date" {...register("due_date")} />
+            <Controller
+              control={control}
+              name="due_date"
+              render={({ field }) => (
+                <DatePicker
+                  value={isoToDate(field.value)}
+                  onChange={(d) => field.onChange(dateToIso(d))}
+                />
+              )}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Variabilní symbol</Label>
             <Input
               placeholder="Auto-generovaný"
+              className="font-mono"
               {...register("variable_symbol")}
             />
           </div>

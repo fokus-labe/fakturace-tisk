@@ -22,6 +22,11 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { formatCZK, formatDateInput } from "@/lib/utils/format";
 import {
+  DatePicker,
+  dateToIso,
+  isoToDate,
+} from "@/components/ui/date-picker";
+import {
   receivedInvoiceSchema,
   type ReceivedInvoiceInput,
   type ReceivedInvoiceOutput,
@@ -33,15 +38,23 @@ import {
   type ReceivedPaymentMethod,
 } from "@/types/received-invoice";
 import type { Supplier } from "@/types/supplier";
+import { SupplierCreateDialog } from "@/components/supplier/supplier-create-dialog";
+
+type SupplierLite = Pick<
+  Supplier,
+  "id" | "name" | "default_payment_method" | "default_category"
+>;
 
 interface Props {
-  suppliers: Pick<
-    Supplier,
-    "id" | "name" | "default_payment_method" | "default_category"
-  >[];
-  initial?: Partial<ReceivedInvoiceInput> & { id?: string; pdf_url?: string | null };
+  suppliers: SupplierLite[];
+  initial?: Partial<ReceivedInvoiceInput> & {
+    id?: string;
+    pdf_url?: string | null;
+  };
   mode?: "create" | "edit";
 }
+
+const NEW_SUPPLIER_VALUE = "__new__";
 
 const CATEGORY_OPTIONS = (
   Object.keys(RECEIVED_INVOICE_CATEGORY_LABELS) as ReceivedInvoiceCategory[]
@@ -60,12 +73,14 @@ export function ReceivedInvoiceForm({
   const [submitting, setSubmitting] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [markPaidNow, setMarkPaidNow] = useState(false);
+  const [supplierList, setSupplierList] = useState<SupplierLite[]>(suppliers);
+  const [supplierDialogOpen, setSupplierDialogOpen] = useState(false);
 
   const supplierById = useMemo(() => {
-    const map = new Map<string, (typeof suppliers)[number]>();
-    for (const s of suppliers) map.set(s.id, s);
+    const map = new Map<string, SupplierLite>();
+    for (const s of supplierList) map.set(s.id, s);
     return map;
-  }, [suppliers]);
+  }, [supplierList]);
 
   const today = formatDateInput(new Date());
 
@@ -230,7 +245,13 @@ export function ReceivedInvoiceForm({
             render={({ field }) => (
               <Select
                 value={field.value || ""}
-                onValueChange={(v) => field.onChange(v ?? "")}
+                onValueChange={(v) => {
+                  if (v === NEW_SUPPLIER_VALUE) {
+                    setSupplierDialogOpen(true);
+                    return;
+                  }
+                  field.onChange(v ?? "");
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue>
@@ -241,17 +262,14 @@ export function ReceivedInvoiceForm({
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {suppliers.length === 0 ? (
-                    <div className="p-3 text-sm text-muted-foreground">
-                      Nejdřív přidej dodavatele
-                    </div>
-                  ) : (
-                    suppliers.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))
-                  )}
+                  {supplierList.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={NEW_SUPPLIER_VALUE}>
+                    + Vytvořit nového dodavatele
+                  </SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -264,6 +282,34 @@ export function ReceivedInvoiceForm({
         </CardContent>
       </Card>
 
+      <SupplierCreateDialog
+        open={supplierDialogOpen}
+        onOpenChange={setSupplierDialogOpen}
+        onCreated={(s) => {
+          const lite: SupplierLite = {
+            id: s.id,
+            name: s.name,
+            default_payment_method: s.default_payment_method,
+            default_category: s.default_category,
+          };
+          setSupplierList((prev) => [...prev, lite]);
+          setValue("supplier_id", s.id);
+          if (s.default_payment_method) {
+            setValue(
+              "payment_method",
+              s.default_payment_method as ReceivedPaymentMethod,
+            );
+          }
+          if (s.default_category) {
+            setValue(
+              "category",
+              s.default_category as ReceivedInvoiceCategory,
+            );
+          }
+          router.refresh();
+        }}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Detaily faktury</CardTitle>
@@ -275,7 +321,16 @@ export function ReceivedInvoiceForm({
           </div>
           <div className="space-y-1.5">
             <Label>Datum vystavení *</Label>
-            <Input type="date" {...register("issued_at")} />
+            <Controller
+              control={control}
+              name="issued_at"
+              render={({ field }) => (
+                <DatePicker
+                  value={isoToDate(field.value)}
+                  onChange={(d) => field.onChange(dateToIso(d))}
+                />
+              )}
+            />
             {errors.issued_at ? (
               <p className="text-xs text-destructive">
                 {errors.issued_at.message}
@@ -284,7 +339,16 @@ export function ReceivedInvoiceForm({
           </div>
           <div className="space-y-1.5">
             <Label>Splatnost</Label>
-            <Input type="date" {...register("due_date")} />
+            <Controller
+              control={control}
+              name="due_date"
+              render={({ field }) => (
+                <DatePicker
+                  value={isoToDate(field.value ?? null)}
+                  onChange={(d) => field.onChange(dateToIso(d))}
+                />
+              )}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Způsob platby</Label>
