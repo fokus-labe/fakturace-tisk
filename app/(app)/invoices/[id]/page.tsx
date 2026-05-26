@@ -55,7 +55,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
         </Link>
       </div>
 
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="space-y-4">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-semibold tracking-tight">

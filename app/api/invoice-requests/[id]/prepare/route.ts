@@ -1,11 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { renderInvoicePdf } from "@/lib/pdf/generate-invoice-pdf";
-import { getResend } from "@/lib/email/resend";
-import {
-  InvoiceRequestEmail,
-  invoiceRequestSubject,
-} from "@/lib/email/templates/invoice-request";
+import { buildAccountantMailto } from "@/lib/email/mailto";
 import { calculateInvoiceTotals } from "@/lib/utils/vat";
 
 export const runtime = "nodejs";
@@ -64,40 +60,12 @@ export async function POST(
   }
   const pdfUrl = `invoice-pdfs/${storagePath}`;
 
-  const accountantEmail =
-    process.env.ACCOUNTANT_EMAIL ?? "calek@fokuslabe.cz";
-  const accountantName = process.env.ACCOUNTANT_NAME ?? "Petře";
-  const from = process.env.RESEND_FROM_EMAIL ?? "fakturace@fokuslabe.cz";
-
-  const subject = invoiceRequestSubject({ client, totals });
-  const filename = `podklad-${data.variable_symbol ?? id}.pdf`;
-
-  const resend = getResend();
-  const { error: emailErr } = await resend.emails.send({
-    from,
-    to: accountantEmail,
-    subject,
-    react: (
-      <InvoiceRequestEmail
-        invoice={data}
-        client={client}
-        totals={totals}
-        accountantName={accountantName}
-      />
-    ),
-    attachments: [
-      {
-        filename,
-        content: pdfBuffer.toString("base64"),
-      },
-    ],
+  const mailto = buildAccountantMailto({
+    client: { name: client.name, ico: client.ico },
+    totals,
+    dueDate: data.due_date ?? data.issued_at,
+    variableSymbol: data.variable_symbol ?? "",
   });
-  if (emailErr) {
-    return NextResponse.json(
-      { error: emailErr.message ?? "Email se nepodařilo odeslat" },
-      { status: 500 },
-    );
-  }
 
   const now = new Date().toISOString();
   await supabase
@@ -106,9 +74,13 @@ export async function POST(
       pdf_url: pdfUrl,
       email_sent_at: now,
       accountant_notified_at: now,
-      status: "sent_to_accountant",
     })
     .eq("id", id);
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    pdf_url: pdfUrl,
+    mailto_link: mailto.href,
+    subject: mailto.subject,
+    body: mailto.body,
+  });
 }
