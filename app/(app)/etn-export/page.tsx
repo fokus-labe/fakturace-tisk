@@ -1,29 +1,24 @@
-import { FileSpreadsheet } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Upload } from "lucide-react";
+import { EtnExportClient } from "./etn-export-client";
 
 export const metadata = { title: "ETN Export · Fokus tisk" };
 
 export default function EtnExportPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">ETN Export</h1>
-        <p className="text-sm text-muted-foreground">
-          Export podkladů pro účetní Petra Čálka.
-        </p>
+      <div className="flex items-center gap-3">
+        <Upload className="size-5 text-muted-foreground" />
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            ETN Export pro Petra
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Generuj XLSX s evidencí tržeb a nákladů pro účetního.
+          </p>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileSpreadsheet className="size-4" />
-            Modul v přípravě
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Modul ETN Export bude implementován v další fázi (Sezení B).
-        </CardContent>
-      </Card>
+      <EtnExportClient />
     </div>
   );
 }

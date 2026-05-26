@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
-import { formatCZK, formatDate } from "@/lib/utils/format";
+import { formatCZK, formatDate, formatDateInput } from "@/lib/utils/format";
 import { ReceivedInvoiceStatusBadge } from "@/components/received-invoice/received-invoice-status-badge";
 import { ReceivedInvoiceFilters } from "./received-invoice-filters";
 import {
@@ -122,6 +122,7 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
                   <TableHead>Dodavatel</TableHead>
                   <TableHead>Číslo</TableHead>
                   <TableHead>Datum</TableHead>
+                  <TableHead>Splatnost</TableHead>
                   <TableHead>Popis</TableHead>
                   <TableHead>Kategorie</TableHead>
                   <TableHead className="text-right">Částka s DPH</TableHead>
@@ -130,45 +131,70 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invoices.map((inv) => (
-                  <TableRow key={inv.id}>
-                    <TableCell>
-                      <Link
-                        href={`/received-invoices/${inv.id}`}
-                        className="hover:underline"
+                {invoices.map((inv) => {
+                  const today = formatDateInput(new Date());
+                  const overdue =
+                    inv.due_date &&
+                    inv.due_date < today &&
+                    inv.status !== "paid" &&
+                    inv.status !== "archived" &&
+                    inv.status !== "cancelled";
+                  return (
+                    <TableRow
+                      key={inv.id}
+                      className={cn(
+                        overdue &&
+                          "bg-red-50/60 hover:bg-red-50 dark:bg-red-950/20 dark:hover:bg-red-950/30",
+                      )}
+                    >
+                      <TableCell>
+                        <Link
+                          href={`/received-invoices/${inv.id}`}
+                          className="hover:underline"
+                        >
+                          {inv.supplier?.name ?? "—"}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {inv.supplier_invoice_number ?? "—"}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {formatDate(inv.issued_at)}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          "tabular-nums",
+                          overdue && "text-red-700 dark:text-red-400 font-medium",
+                        )}
                       >
-                        {inv.supplier?.name ?? "—"}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      {inv.supplier_invoice_number ?? "—"}
-                    </TableCell>
-                    <TableCell>{formatDate(inv.issued_at)}</TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {inv.description}
-                    </TableCell>
-                    <TableCell>
-                      {
-                        RECEIVED_INVOICE_CATEGORY_LABELS[
-                          inv.category as ReceivedInvoiceCategory
-                        ]
-                      }
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCZK(Number(inv.amount_total))}
-                    </TableCell>
-                    <TableCell>
-                      {
-                        RECEIVED_PAYMENT_METHOD_LABELS[
-                          inv.payment_method as ReceivedPaymentMethod
-                        ]
-                      }
-                    </TableCell>
-                    <TableCell>
-                      <ReceivedInvoiceStatusBadge status={inv.status} />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        {formatDate(inv.due_date)}
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate">
+                        {inv.description}
+                      </TableCell>
+                      <TableCell>
+                        {
+                          RECEIVED_INVOICE_CATEGORY_LABELS[
+                            inv.category as ReceivedInvoiceCategory
+                          ]
+                        }
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCZK(Number(inv.amount_total))}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {
+                          RECEIVED_PAYMENT_METHOD_LABELS[
+                            inv.payment_method as ReceivedPaymentMethod
+                          ]
+                        }
+                      </TableCell>
+                      <TableCell>
+                        <ReceivedInvoiceStatusBadge status={inv.status} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

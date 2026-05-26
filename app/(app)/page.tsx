@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,8 @@ import { calculateInvoiceTotals } from "@/lib/utils/vat";
 import { formatCZK, formatDate } from "@/lib/utils/format";
 import { InvoiceStatusBadge } from "@/components/invoice/invoice-status-badge";
 import { ReceivedInvoiceStatusBadge } from "@/components/received-invoice/received-invoice-status-badge";
+import { CashflowChart } from "@/components/dashboard/cashflow-chart";
+import { getDashboardStats } from "@/lib/dashboard/stats";
 import type { InvoiceStatus } from "@/types/invoice";
 import type { ReceivedInvoiceStatus } from "@/types/received-invoice";
 
@@ -33,10 +35,30 @@ const RECEIVED_STATUS_CARDS: { key: ReceivedInvoiceStatus; label: string }[] = [
   { key: "archived", label: "Archiv" },
 ];
 
+function MoMBadge({ pct }: { pct: number | null }) {
+  if (pct === null) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const positive = pct >= 0;
+  const Icon = positive ? TrendingUp : TrendingDown;
+  const color = positive ? "text-emerald-600" : "text-red-600";
+  return (
+    <span className={cn("text-xs flex items-center gap-1", color)}>
+      <Icon className="size-3" />
+      {positive ? "+" : ""}
+      {pct} % proti min. měsíci
+    </span>
+  );
+}
+
 export default async function Dashboard() {
   const supabase = await createClient();
 
-  const [{ data: issued }, { data: received }] = await Promise.all([
+  const [
+    { data: issued },
+    { data: received },
+    stats,
+  ] = await Promise.all([
     supabase
       .from("invoice_requests")
       .select(
@@ -49,6 +71,7 @@ export default async function Dashboard() {
       .select("*, supplier:suppliers(name)")
       .order("created_at", { ascending: false })
       .limit(200),
+    getDashboardStats(supabase),
   ]);
 
   const issuedList = issued ?? [];
@@ -81,6 +104,8 @@ export default async function Dashboard() {
   const recentIssued = issuedList.slice(0, 5);
   const recentReceived = receivedList.slice(0, 5);
 
+  const netPositive = stats.currentMonth.netProfitWithVat >= 0;
+
   return (
     <div className="space-y-8">
       <div className="flex items-end justify-between gap-4">
@@ -98,6 +123,177 @@ export default async function Dashboard() {
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
+          Tento měsíc
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                Příjmy (vystavené)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-1">
+              <div className="text-2xl font-semibold tabular-nums">
+                {formatCZK(stats.currentMonth.issued.total_with_vat)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                z {stats.currentMonth.issued.count} faktur
+              </div>
+              <MoMBadge pct={stats.currentMonth.monthOverMonthIssuedPct} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                Výdaje (přijaté)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-1">
+              <div className="text-2xl font-semibold tabular-nums">
+                {formatCZK(stats.currentMonth.received.total_with_vat)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                z {stats.currentMonth.received.count} faktur
+              </div>
+              <MoMBadge pct={stats.currentMonth.monthOverMonthReceivedPct} />
+            </CardContent>
+          </Card>
+
+          <Card
+            className={cn(
+              netPositive
+                ? "border-emerald-500/40 bg-emerald-50/40 dark:bg-emerald-950/20"
+                : "border-red-500/40 bg-red-50/40 dark:bg-red-950/20",
+            )}
+          >
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                Čistý zisk
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-1">
+              <div
+                className={cn(
+                  "text-2xl font-semibold tabular-nums",
+                  netPositive ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400",
+                )}
+              >
+                {netPositive ? "+" : ""}
+                {formatCZK(stats.currentMonth.netProfitWithVat)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {stats.currentMonth.marginPct === null
+                  ? "marže —"
+                  : `marže ${stats.currentMonth.marginPct} %`}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                K zaplacení
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-1">
+              <div className="text-xl font-semibold tabular-nums">
+                {formatCZK(stats.pending.unpaidReceived.total)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {stats.pending.unpaidReceived.count} přijatých · status entered
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                Čeká u účetní
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-1">
+              <div className="text-xl font-semibold tabular-nums">
+                {stats.pending.atAccountant.count}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                vydaných faktur čeká na vystavení od Petra
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <CashflowChart data={stats.cashflow12months} />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Top 5 dodavatelů ({new Date().getFullYear()})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {stats.topSuppliers.length === 0 ? (
+              <p className="text-sm text-muted-foreground p-6">
+                Žádné záznamy tento rok.
+              </p>
+            ) : (
+              <Table>
+                <TableBody>
+                  {stats.topSuppliers.map((s, i) => (
+                    <TableRow key={s.name}>
+                      <TableCell className="w-8 text-muted-foreground tabular-nums">
+                        {i + 1}.
+                      </TableCell>
+                      <TableCell>{s.name}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCZK(s.total)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Top 5 klientů ({new Date().getFullYear()})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {stats.topClients.length === 0 ? (
+              <p className="text-sm text-muted-foreground p-6">
+                Žádné záznamy tento rok.
+              </p>
+            ) : (
+              <Table>
+                <TableBody>
+                  {stats.topClients.map((c, i) => (
+                    <TableRow key={c.name}>
+                      <TableCell className="w-8 text-muted-foreground tabular-nums">
+                        {i + 1}.
+                      </TableCell>
+                      <TableCell>{c.name}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCZK(c.total)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
           Vydané faktury
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -109,7 +305,7 @@ export default async function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="text-2xl font-semibold">
+                <div className="text-2xl font-semibold tabular-nums">
                   {issuedCounts[s.key]}
                 </div>
               </CardContent>
@@ -131,7 +327,7 @@ export default async function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="text-2xl font-semibold">
+                <div className="text-2xl font-semibold tabular-nums">
                   {receivedCounts[s.key]}
                 </div>
               </CardContent>
@@ -188,9 +384,13 @@ export default async function Dashboard() {
                           {inv.client?.name ?? "—"}
                         </Link>
                       </TableCell>
-                      <TableCell>{formatDate(inv.issued_at)}</TableCell>
-                      <TableCell>{inv.variable_symbol ?? "—"}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="tabular-nums">
+                        {formatDate(inv.issued_at)}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {inv.variable_symbol ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
                         {formatCZK(totals.withVat)}
                       </TableCell>
                       <TableCell>
@@ -242,11 +442,13 @@ export default async function Dashboard() {
                         {inv.supplier?.name ?? "—"}
                       </Link>
                     </TableCell>
-                    <TableCell>{formatDate(inv.issued_at)}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {formatDate(inv.issued_at)}
+                    </TableCell>
                     <TableCell className="max-w-xs truncate">
                       {inv.description}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right tabular-nums">
                       {formatCZK(Number(inv.amount_total))}
                     </TableCell>
                     <TableCell>

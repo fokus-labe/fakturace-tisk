@@ -96,12 +96,14 @@ export default async function ReceivedInvoiceDetailPage({ params }: PageProps) {
             ) : null}
             {invoice.supplier?.ico ? (
               <div className="text-muted-foreground">
-                IČO: {invoice.supplier.ico}
+                IČO:{" "}
+                <span className="font-mono text-sm">{invoice.supplier.ico}</span>
               </div>
             ) : null}
             {invoice.supplier?.dic ? (
               <div className="text-muted-foreground">
-                DIČ: {invoice.supplier.dic}
+                DIČ:{" "}
+                <span className="font-mono text-sm">{invoice.supplier.dic}</span>
               </div>
             ) : null}
           </CardContent>
@@ -213,11 +215,21 @@ export default async function ReceivedInvoiceDetailPage({ params }: PageProps) {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div className="flex justify-between gap-4">
       <span className="text-muted-foreground">{label}</span>
-      <span>{value}</span>
+      <span className={mono ? "font-mono text-sm" : "tabular-nums"}>
+        {value}
+      </span>
     </div>
   );
 }

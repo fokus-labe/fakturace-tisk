@@ -102,12 +102,14 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
             ) : null}
             {invoice.client?.ico ? (
               <div className="text-muted-foreground">
-                IČO: {invoice.client.ico}
+                IČO:{" "}
+                <span className="font-mono text-sm">{invoice.client.ico}</span>
               </div>
             ) : null}
             {invoice.client?.dic ? (
               <div className="text-muted-foreground">
-                DIČ: {invoice.client.dic}
+                DIČ:{" "}
+                <span className="font-mono text-sm">{invoice.client.dic}</span>
               </div>
             ) : null}
             {invoice.client?.email ? (
@@ -131,7 +133,11 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               />
             ) : null}
             <Row label="Splatnost" value={formatDate(invoice.due_date)} />
-            <Row label="Variabilní symbol" value={invoice.variable_symbol ?? "—"} />
+            <Row
+              label="Variabilní symbol"
+              value={invoice.variable_symbol ?? "—"}
+              mono
+            />
             <Row label="Způsob platby" value={invoice.payment_method ?? "—"} />
             {invoice.short_description ? (
               <Row label="Krátký popis" value={invoice.short_description} />
@@ -140,6 +146,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               <Row
                 label="Číslo faktury (od účetní)"
                 value={invoice.external_invoice_number}
+                mono
               />
             ) : null}
             {invoice.email_sent_at ? (
@@ -229,11 +236,21 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div className="flex justify-between gap-4">
       <span className="text-muted-foreground">{label}</span>
-      <span>{value}</span>
+      <span className={mono ? "font-mono text-sm" : "tabular-nums"}>
+        {value}
+      </span>
     </div>
   );
 }

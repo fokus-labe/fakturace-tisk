@@ -91,6 +91,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
                   <TableHead>Datum</TableHead>
                   <TableHead>Splatnost</TableHead>
                   <TableHead>VS</TableHead>
+                  <TableHead>Způsob platby</TableHead>
                   <TableHead className="text-right">Částka</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -103,6 +104,9 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
                     vat_rate: Number(it.vat_rate),
                   }));
                   const totals = calculateInvoiceTotals(items);
+                  const showPayment =
+                    inv.status === "invoice_issued" ||
+                    inv.status === "archived";
                   return (
                     <TableRow key={inv.id}>
                       <TableCell>
@@ -113,10 +117,19 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
                           {inv.client?.name ?? "—"}
                         </Link>
                       </TableCell>
-                      <TableCell>{formatDate(inv.issued_at)}</TableCell>
-                      <TableCell>{formatDate(inv.due_date)}</TableCell>
-                      <TableCell>{inv.variable_symbol ?? "—"}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="tabular-nums">
+                        {formatDate(inv.issued_at)}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {formatDate(inv.due_date)}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {inv.variable_symbol ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {showPayment ? inv.payment_method ?? "—" : "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
                         {formatCZK(totals.withVat)}
                       </TableCell>
                       <TableCell>
