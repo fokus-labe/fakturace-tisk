@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  CartesianGrid,
   Legend,
   Line,
   LineChart,
@@ -95,15 +96,20 @@ export function CashflowChart({ data }: Props) {
               data={chartData}
               margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
             >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="var(--color-border)"
+                vertical={false}
+              />
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
                 tickLine={false}
-                axisLine={{ stroke: "var(--border)" }}
+                axisLine={{ stroke: "var(--color-border)" }}
               />
               <YAxis
                 tickFormatter={formatAxisCZK}
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
                 tickLine={false}
                 axisLine={false}
                 width={56}
@@ -112,27 +118,37 @@ export function CashflowChart({ data }: Props) {
                 formatter={(value) => formatCZK(Number(value ?? 0))}
                 labelFormatter={(label) => `Měsíc: ${label}`}
                 contentStyle={{
-                  background: "var(--popover)",
-                  border: "1px solid var(--border)",
+                  background: "#FFFFFF",
+                  border: "1px solid var(--color-border)",
                   borderRadius: 8,
                   fontSize: 12,
+                  fontFamily: "var(--font-mono)",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                }}
+                labelStyle={{
+                  fontFamily: "var(--font-sans)",
+                  color: "var(--color-muted-foreground)",
+                  marginBottom: 4,
                 }}
               />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend
+                wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                iconType="line"
+              />
               <Line
                 type="monotone"
                 dataKey="Příjmy"
-                stroke="#10b981"
+                stroke="#10B981"
                 strokeWidth={2}
-                dot={{ r: 3 }}
+                dot={{ r: 3, fill: "#10B981" }}
                 activeDot={{ r: 5 }}
               />
               <Line
                 type="monotone"
                 dataKey="Výdaje"
-                stroke="#ef4444"
+                stroke="#EF4444"
                 strokeWidth={2}
-                dot={{ r: 3 }}
+                dot={{ r: 3, fill: "#EF4444" }}
                 activeDot={{ r: 5 }}
               />
             </LineChart>

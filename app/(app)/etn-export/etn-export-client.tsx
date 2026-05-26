@@ -2,18 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { format, parseISO } from "date-fns";
+import { cs } from "date-fns/locale";
 import {
   AlertTriangle,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  CalendarIcon,
   Download,
-  FileSpreadsheet,
   History,
   Loader2,
   RefreshCw,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -75,14 +84,10 @@ interface EtnExportRow {
   filename: string;
 }
 
-function defaultFrom(): string {
+function defaultFromDate(): Date {
   const d = new Date();
   d.setDate(d.getDate() - 14);
-  return formatDateInput(d);
-}
-
-function defaultTo(): string {
-  return formatDateInput(new Date());
+  return d;
 }
 
 const ISSUED_PAYMENT_LABELS: Record<string, string> = {
@@ -92,15 +97,59 @@ const ISSUED_PAYMENT_LABELS: Record<string, string> = {
   QR: "QR",
 };
 
+function DatePickerField({
+  value,
+  onChange,
+  label,
+}: {
+  value: Date | undefined;
+  onChange: (d: Date | undefined) => void;
+  label: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Popover>
+        <PopoverTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(
+                "w-full justify-start text-left font-normal",
+                !value && "text-muted-foreground",
+              )}
+            />
+          }
+        >
+          <CalendarIcon className="size-4 mr-2" />
+          {value ? format(value, "d. M. yyyy", { locale: cs }) : "Vyber datum"}
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={value}
+            onSelect={onChange}
+            autoFocus
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 export function EtnExportClient() {
-  const [periodStart, setPeriodStart] = useState(defaultFrom());
-  const [periodEnd, setPeriodEnd] = useState(defaultTo());
+  const [from, setFrom] = useState<Date | undefined>(defaultFromDate());
+  const [to, setTo] = useState<Date | undefined>(new Date());
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [history, setHistory] = useState<EtnExportRow[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [regenerating, setRegenerating] = useState<string | null>(null);
+
+  const periodStart = from ? formatDateInput(from) : "";
+  const periodEnd = to ? formatDateInput(to) : "";
 
   async function loadHistory() {
     setLoadingHistory(true);
@@ -196,10 +245,7 @@ export function EtnExportClient() {
     <div className="space-y-8">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileSpreadsheet className="size-4" />
-            Generovat ETN
-          </CardTitle>
+          <CardTitle className="text-base">Generovat ETN</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
@@ -207,22 +253,8 @@ export function EtnExportClient() {
             dní.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Od datum *</Label>
-              <Input
-                type="date"
-                value={periodStart}
-                onChange={(e) => setPeriodStart(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Do datum *</Label>
-              <Input
-                type="date"
-                value={periodEnd}
-                onChange={(e) => setPeriodEnd(e.target.value)}
-              />
-            </div>
+            <DatePickerField label="Od datum *" value={from} onChange={setFrom} />
+            <DatePickerField label="Do datum *" value={to} onChange={setTo} />
           </div>
           <Button onClick={fetchPreview} disabled={loadingPreview}>
             {loadingPreview ? (
@@ -239,32 +271,37 @@ export function EtnExportClient() {
 
       {preview ? (
         <>
-          <div className="space-y-2">
+          <div>
             <h2 className="text-lg font-semibold">
               Náhled za {formatDate(periodStart)} – {formatDate(periodEnd)}
             </h2>
           </div>
 
           {preview.warnings.length > 0 ? (
-            <div className="space-y-2">
-              {preview.warnings.map((w) => (
-                <div
-                  key={w.type}
-                  className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm dark:bg-amber-950/30 dark:text-amber-100 dark:border-amber-700"
-                >
-                  <AlertTriangle className="size-4 mt-0.5 shrink-0" />
-                  <span>{w.message}</span>
-                </div>
-              ))}
-            </div>
+            <Card className="border-amber-300 bg-amber-50">
+              <CardContent className="p-4 space-y-2">
+                {preview.warnings.map((w) => (
+                  <div
+                    key={w.type}
+                    className="flex items-start gap-2 text-sm text-amber-900"
+                  >
+                    <AlertTriangle className="size-4 mt-0.5 shrink-0 text-amber-600" />
+                    <span>{w.message}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
           ) : null}
 
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center justify-between gap-3 flex-wrap">
-                <span>NÁKLADY ({preview.receivedInvoices.length} položek)</span>
-                <span className="text-sm font-normal text-muted-foreground tabular-nums">
-                  Celkem s DPH:{" "}
+                <span className="flex items-center gap-2">
+                  <ArrowDownCircle className="size-4 text-red-600" />
+                  NÁKLADY ({preview.receivedInvoices.length} položek)
+                </span>
+                <span className="text-sm font-normal text-muted-foreground font-mono tabular-nums">
+                  s DPH:{" "}
                   <strong className="text-foreground">
                     {formatCZK(receivedTotalWith)}
                   </strong>{" "}
@@ -282,7 +319,7 @@ export function EtnExportClient() {
                 </p>
               ) : (
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="bg-muted/50">
                     <TableRow>
                       <TableHead>Datum</TableHead>
                       <TableHead>Dodavatel</TableHead>
@@ -306,10 +343,10 @@ export function EtnExportClient() {
                         <TableCell className="max-w-xs truncate">
                           {r.description}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="text-right font-mono tabular-nums">
                           {formatCZK(r.amount_with_vat)}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="text-right font-mono tabular-nums">
                           {formatCZK(r.amount_no_vat)}
                         </TableCell>
                       </TableRow>
@@ -323,9 +360,12 @@ export function EtnExportClient() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center justify-between gap-3 flex-wrap">
-                <span>TRŽBY ({preview.issuedInvoices.length} položek)</span>
-                <span className="text-sm font-normal text-muted-foreground tabular-nums">
-                  Celkem s DPH:{" "}
+                <span className="flex items-center gap-2">
+                  <ArrowUpCircle className="size-4 text-emerald-600" />
+                  TRŽBY ({preview.issuedInvoices.length} položek)
+                </span>
+                <span className="text-sm font-normal text-muted-foreground font-mono tabular-nums">
+                  s DPH:{" "}
                   <strong className="text-foreground">
                     {formatCZK(issuedTotalWith)}
                   </strong>{" "}
@@ -343,7 +383,7 @@ export function EtnExportClient() {
                 </p>
               ) : (
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="bg-muted/50">
                     <TableRow>
                       <TableHead>Datum</TableHead>
                       <TableHead>Klient / popis</TableHead>
@@ -365,17 +405,17 @@ export function EtnExportClient() {
                               ? `FV ${r.external_invoice_number}`
                               : r.client_name)}
                         </TableCell>
-                        <TableCell className="text-muted-foreground tabular-nums">
+                        <TableCell className="text-muted-foreground font-mono text-xs">
                           {r.external_invoice_number ?? "—"}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {ISSUED_PAYMENT_LABELS[r.payment_method] ??
                             r.payment_method}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="text-right font-mono tabular-nums">
                           {formatCZK(r.amount_with_vat)}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="text-right font-mono tabular-nums">
                           {formatCZK(r.amount_no_vat)}
                         </TableCell>
                       </TableRow>
@@ -421,14 +461,12 @@ export function EtnExportClient() {
         {loadingHistory && history.length === 0 ? (
           <p className="text-sm text-muted-foreground">Načítám…</p>
         ) : history.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Zatím žádné exporty.
-          </p>
+          <p className="text-sm text-muted-foreground">Zatím žádné exporty.</p>
         ) : (
           <Card>
             <CardContent className="p-0">
               <Table>
-                <TableHeader>
+                <TableHeader className="bg-muted/50">
                   <TableRow>
                     <TableHead>Vygenerováno</TableHead>
                     <TableHead>Období</TableHead>
@@ -449,13 +487,13 @@ export function EtnExportClient() {
                       </TableCell>
                       <TableCell className="text-sm">
                         {row.invoice_count_received}× ·{" "}
-                        <span className="tabular-nums">
+                        <span className="font-mono tabular-nums">
                           {formatCZK(Number(row.total_received_with_vat))}
                         </span>
                       </TableCell>
                       <TableCell className="text-sm">
                         {row.invoice_count_issued}× ·{" "}
-                        <span className="tabular-nums">
+                        <span className="font-mono tabular-nums">
                           {formatCZK(Number(row.total_issued_with_vat))}
                         </span>
                       </TableCell>

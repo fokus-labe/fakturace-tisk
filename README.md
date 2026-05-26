@@ -1,36 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fakturace Fokus tisk
 
-## Getting Started
+Interní systém pro evidenci faktur z provozovny Fokus tisk (Fokus Labe, z. ú.).
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** (App Router)
+- **Supabase** — Postgres + Auth + Storage
+- **Tailwind v4** + shadcn/ui (Base UI variant)
+- **ExcelJS** pro generování ETN exportu
+- **Recharts** pro dashboard cashflow graf
+- **React Hook Form + Zod** pro validaci formulářů
+- Emaily jdou ručně z Gmailu (Resend nepoužíváme)
+
+## Funkce
+
+- Vydané faktury — workflow draft → sent_to_accountant → invoice_issued → archived
+- Přijaté faktury — workflow draft → entered → paid → archived
+- Dodavatelé a klienti
+- ETN Export — XLSX podle šablony Fokus Labe (sekce NÁKLADY / TRŽBY)
+- Dashboard cashflow — měsíční přehled, 12měsíční graf, top dodavatelé/klienti
+
+## Lokální vývoj
 
 ```bash
+npm install
+cp .env.local.example .env.local
+# Vyplň Supabase klíče v .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+App běží na http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Potřebné v `.env.local` (lokálně) i ve Vercel projektu:
 
-## Learn More
+| Variable | Účel |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon (public) klíč |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role klíč (pro API auth) |
+| `ACCOUNTANT_EMAIL` | Email Petra Čálka (předvyplnění mailto) |
+| `ACCOUNTANT_NAME` | Jméno účetního (v emailu) |
+| `NEXT_PUBLIC_APP_URL` | Veřejná URL deploymentu |
 
-To learn more about Next.js, take a look at the following resources:
+## Deployment na Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Pushni repo na GitHub (private)
+2. Vercel dashboard → **Add New → Project** → vyber repo
+3. Framework: **Next.js** (auto-detect)
+4. Region: **Frankfurt (fra1)** — nakonfigurováno v `vercel.json`
+5. Environment Variables — zkopíruj z `.env.local`:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `ACCOUNTANT_EMAIL`
+   - `ACCOUNTANT_NAME`
+   - `NEXT_PUBLIC_APP_URL` = `https://<deployment>.vercel.app`
+6. **Deploy**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Po prvním deployi:
 
-## Deploy on Vercel
+- Supabase → **Authentication → URL Configuration** →
+  přidej production URL do **Site URL** a **Redirect URLs**
+- `NEXT_PUBLIC_APP_URL` aktualizuj na finální produkční doménu
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Databáze
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Migrace jsou v `supabase/migrations/`. Spouští se **ručně** v Supabase SQL Editoru
+(v pořadí podle čísla):
+
+- `0001_initial_schema.sql` — clients, invoice_requests, invoice_items, api_keys, storage bucket invoice-pdfs
+- `0002_received_invoices_and_suppliers.sql` — suppliers, received_invoices, revize invoice_status (bez `paid`)
+- `0003_etn_exports.sql` — etn_exports audit tabulka + bucket etn-exports
+
+## Build
+
+```bash
+npm run build
+```
+
+Musí projít bez TypeScript chyb. Vercel spustí stejný příkaz při deployi.

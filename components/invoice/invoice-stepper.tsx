@@ -11,16 +11,14 @@ const STEPS: { key: InvoiceStatus; label: string }[] = [
 
 export function InvoiceStepper({ status }: { status: InvoiceStatus }) {
   const cancelled = status === "cancelled";
-  const currentIdx = cancelled
-    ? -1
-    : STEPS.findIndex((s) => s.key === status);
+  const currentIdx = cancelled ? -1 : STEPS.findIndex((s) => s.key === status);
 
   return (
     <div className="relative">
       <ol
         className={cn(
           "flex items-center gap-2 w-full",
-          cancelled && "opacity-60",
+          cancelled && "opacity-40",
         )}
       >
         {STEPS.map((step, i) => {
@@ -32,26 +30,20 @@ export function InvoiceStepper({ status }: { status: InvoiceStatus }) {
               <div className="flex items-center gap-2 min-w-0">
                 <div
                   className={cn(
-                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium ring-1",
-                    isPast &&
-                      "bg-emerald-500 text-white ring-emerald-500",
-                    isCurrent &&
-                      "bg-[#2563EB] text-white ring-[#2563EB]",
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors",
+                    isPast && "bg-emerald-500 text-white",
+                    isCurrent && "bg-primary text-primary-foreground",
                     isFuture &&
-                      "bg-muted text-muted-foreground ring-border",
+                      "border border-border bg-background text-muted-foreground",
                   )}
                 >
-                  {isPast ? (
-                    <Check className="size-4" />
-                  ) : (
-                    <span>{i + 1}</span>
-                  )}
+                  {isPast ? <Check className="size-4" /> : <span>{i + 1}</span>}
                 </div>
                 <span
                   className={cn(
                     "text-sm truncate",
-                    isCurrent && "font-medium",
-                    isFuture && "text-muted-foreground",
+                    isCurrent && "font-medium text-foreground",
+                    (isPast || isFuture) && "text-muted-foreground",
                   )}
                 >
                   {step.label}
@@ -71,11 +63,9 @@ export function InvoiceStepper({ status }: { status: InvoiceStatus }) {
       </ol>
       {cancelled ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-1 ring-1 ring-destructive/30">
-            <X className="size-4 text-destructive" />
-            <span className="text-sm font-medium text-destructive">
-              Zrušeno
-            </span>
+          <div className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-1 ring-1 ring-red-300">
+            <X className="size-4 text-red-700" />
+            <span className="text-sm font-medium text-red-700">Zrušeno</span>
           </div>
         </div>
       ) : null}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Loader2, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,28 +36,45 @@ export function LoginForm() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+        <div className="relative">
+          <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="pl-9"
+            placeholder="jmeno@fokuslabe.cz"
+          />
+        </div>
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Heslo</Label>
-        <Input
-          id="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <div className="relative">
+          <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="pl-9"
+            placeholder="••••••••"
+          />
+        </div>
       </div>
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? "Přihlašuji…" : "Přihlásit se"}
+      <Button type="submit" className="w-full" disabled={loading} size="lg">
+        {loading ? (
+          <>
+            <Loader2 className="size-4 mr-2 animate-spin" />
+            Přihlašuji…
+          </>
+        ) : (
+          "Přihlásit se"
+        )}
       </Button>
     </form>
   );
