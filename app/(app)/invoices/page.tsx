@@ -19,14 +19,13 @@ import { InvoiceFilters } from "./invoice-filters";
 import type { InvoiceStatus } from "@/types/invoice";
 
 interface PageProps {
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; show_archived?: string }>;
 }
 
 const STATUSES: InvoiceStatus[] = [
   "draft",
   "sent_to_accountant",
   "invoice_issued",
-  "paid",
   "archived",
   "cancelled",
 ];
@@ -37,6 +36,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
     ? (sp.status as InvoiceStatus)
     : undefined;
   const q = sp.q?.trim().toLowerCase();
+  const showArchived = sp.show_archived === "1";
 
   const supabase = await createClient();
   let query = supabase
@@ -45,6 +45,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
     .order("created_at", { ascending: false })
     .limit(200);
   if (status) query = query.eq("status", status);
+  else if (!showArchived) query = query.neq("status", "archived");
   const { data } = await query;
   let invoices = data ?? [];
   if (q) {
@@ -57,7 +58,9 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Faktury</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Vydané faktury
+          </h1>
           <p className="text-sm text-muted-foreground">
             Evidence žádostí o vystavení faktury.
           </p>
@@ -68,7 +71,11 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
         </Link>
       </div>
 
-      <InvoiceFilters initialStatus={status} initialQ={sp.q ?? ""} />
+      <InvoiceFilters
+        initialStatus={status}
+        initialQ={sp.q ?? ""}
+        initialShowArchived={showArchived}
+      />
 
       <Card>
         <CardContent className="p-0">

@@ -1,7 +1,8 @@
 export const ISSUER = {
   name: "Fokus Labe, z. ú.",
   ico: "44226586",
-  dic: null as string | null,
+  dic: "CZ44226586",
+  dataBox: "cafk8va",
   address: {
     street: "Stroupežnického 1372/9",
     city: "Ústí nad Labem-centrum",
@@ -9,13 +10,14 @@ export const ISSUER = {
     country: "Česká republika",
   },
   bankAccount: {
-    number: "DOPLNIT",
-    bankCode: "DOPLNIT",
-    iban: "DOPLNIT",
+    number: "886879359",
+    bankCode: "0800",
+    formatted: "886879359/0800",
+    iban: "CZ7708000000000886879359",
   },
   contact: {
-    email: "fakturace@fokuslabe.cz",
-    phone: "+420 472 745 150",
+    email: "fokus@fokuslabe.cz",
+    phone: "+420 732 710 367",
   },
   division: {
     name: "Fokus tisk",

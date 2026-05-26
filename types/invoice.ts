@@ -2,11 +2,12 @@ export type InvoiceStatus =
   | "draft"
   | "sent_to_accountant"
   | "invoice_issued"
-  | "paid"
   | "archived"
   | "cancelled";
 
 export type InvoiceSource = "manual" | "eshop_api";
+
+export type IssuedPaymentMethod = "fakturace" | "hotovost" | "karta" | "QR";
 
 export interface Client {
   id: string;
@@ -41,9 +42,11 @@ export interface InvoiceRequest {
   client_id: string;
   status: InvoiceStatus;
   issued_at: string;
+  invoice_issued_at: string | null;
   due_date: string | null;
   variable_symbol: string | null;
-  payment_method: string | null;
+  payment_method: string;
+  short_description: string | null;
   notes: string | null;
   pdf_url: string | null;
   external_invoice_number: string | null;

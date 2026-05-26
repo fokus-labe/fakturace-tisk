@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -26,13 +26,20 @@ import {
 } from "./invoice-form-schema";
 import { calculateInvoiceTotals } from "@/lib/utils/vat";
 import { formatCZK, formatDateInput } from "@/lib/utils/format";
-import type { Client } from "@/types/invoice";
+import type { Client, IssuedPaymentMethod } from "@/types/invoice";
 
 interface Props {
   clients: Pick<Client, "id" | "name">[];
 }
 
 const NEW_CLIENT_VALUE = "__new__";
+
+const PAYMENT_METHOD_OPTIONS: { value: IssuedPaymentMethod; label: string }[] = [
+  { value: "fakturace", label: "Fakturace" },
+  { value: "hotovost", label: "Hotovost" },
+  { value: "karta", label: "Karta" },
+  { value: "QR", label: "QR" },
+];
 
 export function InvoiceForm({ clients }: Props) {
   const router = useRouter();
@@ -46,10 +53,11 @@ export function InvoiceForm({ clients }: Props) {
     defaultValues: {
       client_id: clients[0]?.id ?? "",
       issued_at: formatDateInput(new Date()),
-      payment_method: "převodem",
+      payment_method: "fakturace",
       due_date: formatDateInput(
         new Date(Date.now() + 14 * 24 * 3600 * 1000),
       ),
+      short_description: "",
       items: [
         { description: "", quantity: 1, unit_price_no_vat: 0, vat_rate: 21 },
       ],
@@ -73,6 +81,12 @@ export function InvoiceForm({ clients }: Props) {
     }));
     return calculateInvoiceTotals(items);
   }, [watchedItems]);
+
+  const clientNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of clients) map.set(c.id, c.name);
+    return map;
+  }, [clients]);
 
   function handleClientChange(value: string | null) {
     const v = value ?? NEW_CLIENT_VALUE;
@@ -106,7 +120,8 @@ export function InvoiceForm({ clients }: Props) {
       issued_at: values.issued_at,
       due_date: values.due_date || null,
       variable_symbol: values.variable_symbol || undefined,
-      payment_method: values.payment_method || "převodem",
+      payment_method: values.payment_method ?? "fakturace",
+      short_description: values.short_description || null,
       notes: values.notes || null,
       items: values.items,
       source: "manual" as const,
@@ -140,8 +155,14 @@ export function InvoiceForm({ clients }: Props) {
           <div className="space-y-2">
             <Label>Klient</Label>
             <Select value={clientChoice} onValueChange={handleClientChange}>
-              <SelectTrigger>
-                <SelectValue />
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {(value: string | null) => {
+                    if (!value) return "Vyber klienta…";
+                    if (value === NEW_CLIENT_VALUE) return "+ Nový klient…";
+                    return clientNameById.get(value) ?? value;
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {clients.map((c) => (
@@ -249,7 +270,42 @@ export function InvoiceForm({ clients }: Props) {
           </div>
           <div className="space-y-1.5">
             <Label>Způsob platby</Label>
-            <Input {...register("payment_method")} />
+            <Controller
+              control={control}
+              name="payment_method"
+              render={({ field }) => (
+                <Select
+                  value={field.value ?? "fakturace"}
+                  onValueChange={(v) => field.onChange(v ?? "fakturace")}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {(value: string | null) =>
+                        PAYMENT_METHOD_OPTIONS.find((o) => o.value === value)
+                          ?.label ?? "Fakturace"
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHOD_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+          <div className="space-y-1.5 md:col-span-2">
+            <Label>Krátký popis (pro ETN)</Label>
+            <Input
+              placeholder="např. FA 260100079"
+              {...register("short_description")}
+            />
+            <p className="text-xs text-muted-foreground">
+              Volitelné — použije se v ETN exportu místo názvu klienta.
+            </p>
           </div>
           <div className="space-y-1.5 md:col-span-2">
             <Label>Poznámka</Label>

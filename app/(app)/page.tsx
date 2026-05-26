@@ -15,41 +15,71 @@ import { createClient } from "@/lib/supabase/server";
 import { calculateInvoiceTotals } from "@/lib/utils/vat";
 import { formatCZK, formatDate } from "@/lib/utils/format";
 import { InvoiceStatusBadge } from "@/components/invoice/invoice-status-badge";
+import { ReceivedInvoiceStatusBadge } from "@/components/received-invoice/received-invoice-status-badge";
 import type { InvoiceStatus } from "@/types/invoice";
+import type { ReceivedInvoiceStatus } from "@/types/received-invoice";
 
-const STATUS_LABELS: Record<InvoiceStatus, string> = {
-  draft: "Koncept",
-  sent_to_accountant: "U účetní",
-  invoice_issued: "Vystavené",
-  paid: "Zaplacené",
-  archived: "Archiv",
-  cancelled: "Zrušené",
-};
+const ISSUED_STATUS_CARDS: { key: InvoiceStatus; label: string }[] = [
+  { key: "draft", label: "Koncept" },
+  { key: "sent_to_accountant", label: "U účetní" },
+  { key: "invoice_issued", label: "Vystaveno" },
+  { key: "archived", label: "Archiv" },
+];
+
+const RECEIVED_STATUS_CARDS: { key: ReceivedInvoiceStatus; label: string }[] = [
+  { key: "draft", label: "Koncept" },
+  { key: "entered", label: "Zaevidované" },
+  { key: "paid", label: "Zaplacené" },
+  { key: "archived", label: "Archiv" },
+];
 
 export default async function Dashboard() {
   const supabase = await createClient();
-  const { data: invoices } = await supabase
-    .from("invoice_requests")
-    .select("*, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)")
-    .order("created_at", { ascending: false })
-    .limit(50);
 
-  const list = invoices ?? [];
+  const [{ data: issued }, { data: received }] = await Promise.all([
+    supabase
+      .from("invoice_requests")
+      .select(
+        "*, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("received_invoices")
+      .select("*, supplier:suppliers(name)")
+      .order("created_at", { ascending: false })
+      .limit(200),
+  ]);
 
-  const counts: Record<InvoiceStatus, number> = {
+  const issuedList = issued ?? [];
+  const receivedList = received ?? [];
+
+  const issuedCounts: Record<InvoiceStatus, number> = {
     draft: 0,
     sent_to_accountant: 0,
     invoice_issued: 0,
+    archived: 0,
+    cancelled: 0,
+  };
+  for (const inv of issuedList) {
+    issuedCounts[inv.status as InvoiceStatus] =
+      (issuedCounts[inv.status as InvoiceStatus] ?? 0) + 1;
+  }
+
+  const receivedCounts: Record<ReceivedInvoiceStatus, number> = {
+    draft: 0,
+    entered: 0,
     paid: 0,
     archived: 0,
     cancelled: 0,
   };
-  for (const inv of list) {
-    counts[inv.status as InvoiceStatus] =
-      (counts[inv.status as InvoiceStatus] ?? 0) + 1;
+  for (const inv of receivedList) {
+    receivedCounts[inv.status as ReceivedInvoiceStatus] =
+      (receivedCounts[inv.status as ReceivedInvoiceStatus] ?? 0) + 1;
   }
 
-  const recent = list.slice(0, 5);
+  const recentIssued = issuedList.slice(0, 5);
+  const recentReceived = receivedList.slice(0, 5);
 
   return (
     <div className="space-y-8">
@@ -66,29 +96,62 @@ export default async function Dashboard() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {(Object.keys(counts) as InvoiceStatus[]).map((s) => (
-          <Card key={s}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
-                {STATUS_LABELS[s]}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-2xl font-semibold">{counts[s]}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
+          Vydané faktury
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {ISSUED_STATUS_CARDS.map((s) => (
+            <Card key={s.key}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {s.label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-2xl font-semibold">
+                  {issuedCounts[s.key]}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
+          Přijaté faktury
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {RECEIVED_STATUS_CARDS.map((s) => (
+            <Card key={s.key}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {s.label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-2xl font-semibold">
+                  {receivedCounts[s.key]}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Posledních 5 faktur</CardTitle>
+          <CardTitle className="text-base">Posledních 5 vydaných faktur</CardTitle>
         </CardHeader>
         <CardContent>
-          {recent.length === 0 ? (
+          {recentIssued.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Zatím tu nejsou žádné faktury. <Link className="underline" href="/invoices/new">Založit první</Link>.
+              Zatím tu nejsou žádné faktury.{" "}
+              <Link className="underline" href="/invoices/new">
+                Založit první
+              </Link>
+              .
             </p>
           ) : (
             <Table>
@@ -102,12 +165,18 @@ export default async function Dashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recent.map((inv) => {
-                  const items = (inv.items ?? []).map((it: { quantity: number | string; unit_price_no_vat: number | string; vat_rate: number | string }) => ({
-                    quantity: Number(it.quantity),
-                    unit_price_no_vat: Number(it.unit_price_no_vat),
-                    vat_rate: Number(it.vat_rate),
-                  }));
+                {recentIssued.map((inv) => {
+                  const items = (inv.items ?? []).map(
+                    (it: {
+                      quantity: number | string;
+                      unit_price_no_vat: number | string;
+                      vat_rate: number | string;
+                    }) => ({
+                      quantity: Number(it.quantity),
+                      unit_price_no_vat: Number(it.unit_price_no_vat),
+                      vat_rate: Number(it.vat_rate),
+                    }),
+                  );
                   const totals = calculateInvoiceTotals(items);
                   return (
                     <TableRow key={inv.id}>
@@ -130,6 +199,61 @@ export default async function Dashboard() {
                     </TableRow>
                   );
                 })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Posledních 5 přijatých faktur
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {recentReceived.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Zatím tu nejsou žádné přijaté faktury.{" "}
+              <Link className="underline" href="/received-invoices/new">
+                Založit první
+              </Link>
+              .
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Dodavatel</TableHead>
+                  <TableHead>Datum</TableHead>
+                  <TableHead>Popis</TableHead>
+                  <TableHead className="text-right">Částka</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentReceived.map((inv) => (
+                  <TableRow key={inv.id}>
+                    <TableCell>
+                      <Link
+                        href={`/received-invoices/${inv.id}`}
+                        className="hover:underline"
+                      >
+                        {inv.supplier?.name ?? "—"}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{formatDate(inv.issued_at)}</TableCell>
+                    <TableCell className="max-w-xs truncate">
+                      {inv.description}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatCZK(Number(inv.amount_total))}
+                    </TableCell>
+                    <TableCell>
+                      <ReceivedInvoiceStatusBadge status={inv.status} />
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}

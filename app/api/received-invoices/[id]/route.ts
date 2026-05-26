@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { invoiceStatusUpdateSchema } from "@/lib/validations/invoice";
+import { receivedInvoiceUpdateSchema } from "@/lib/validations/received-invoice";
 
 export const runtime = "nodejs";
 
@@ -17,8 +17,8 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data, error } = await supabase
-    .from("invoice_requests")
-    .select("*, client:clients(*), items:invoice_items(*)")
+    .from("received_invoices")
+    .select("*, supplier:suppliers(*)")
     .eq("id", id)
     .single();
   if (error)
@@ -39,28 +39,22 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
-  const parsed = invoiceStatusUpdateSchema.safeParse(body);
-  if (!parsed.success) {
+  const parsed = receivedInvoiceUpdateSchema.safeParse(body);
+  if (!parsed.success)
     return NextResponse.json(
       { error: "Invalid input", details: parsed.error.flatten() },
       { status: 400 },
     );
-  }
+
   const patch: Record<string, unknown> = { ...parsed.data };
 
-  // Při přechodu na 'invoice_issued' předvyplnit invoice_issued_at, pokud chybí
-  if (patch.status === "invoice_issued" && !patch.invoice_issued_at) {
-    patch.invoice_issued_at = new Date().toISOString().slice(0, 10);
-  }
-  if (patch.external_invoice_number && !patch.status) {
-    patch.status = "invoice_issued";
-    if (!patch.invoice_issued_at) {
-      patch.invoice_issued_at = new Date().toISOString().slice(0, 10);
-    }
+  // Při přechodu na 'paid' doplň paid_at, pokud chybí
+  if (patch.status === "paid" && !patch.paid_at) {
+    patch.paid_at = new Date().toISOString().slice(0, 10);
   }
 
   const { data, error } = await supabase
-    .from("invoice_requests")
+    .from("received_invoices")
     .update(patch)
     .eq("id", id)
     .select("*")
@@ -68,4 +62,25 @@ export async function PATCH(
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { error } = await supabase
+    .from("received_invoices")
+    .delete()
+    .eq("id", id);
+  if (error)
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }

@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { InvoiceStatusBadge } from "@/components/invoice/invoice-status-badge";
+import { InvoiceStepper } from "@/components/invoice/invoice-stepper";
 import { InvoiceActions } from "./invoice-actions";
 import { formatCZK, formatDate } from "@/lib/utils/format";
 import { calculateInvoiceTotals, calculateLineTotal } from "@/lib/utils/vat";
@@ -51,7 +52,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           className="inline-flex items-center hover:text-foreground"
         >
           <ArrowLeft className="size-4 mr-1" />
-          Faktury
+          Vydané faktury
         </Link>
       </div>
 
@@ -68,10 +69,18 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
             {formatDate(invoice.issued_at)}
           </p>
         </div>
+
+        <Card>
+          <CardContent className="py-4">
+            <InvoiceStepper status={invoice.status} />
+          </CardContent>
+        </Card>
+
         <InvoiceActions
           invoiceId={invoice.id}
           status={invoice.status}
           externalInvoiceNumber={invoice.external_invoice_number}
+          invoiceIssuedAt={invoice.invoice_issued_at}
         />
       </div>
 
@@ -114,10 +123,19 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
             <CardTitle className="text-base">Detaily</CardTitle>
           </CardHeader>
           <CardContent className="text-sm space-y-1.5">
-            <Row label="Datum vystavení" value={formatDate(invoice.issued_at)} />
+            <Row label="Datum vystavení (podklad)" value={formatDate(invoice.issued_at)} />
+            {invoice.invoice_issued_at ? (
+              <Row
+                label="Datum vystavení (účetní)"
+                value={formatDate(invoice.invoice_issued_at)}
+              />
+            ) : null}
             <Row label="Splatnost" value={formatDate(invoice.due_date)} />
             <Row label="Variabilní symbol" value={invoice.variable_symbol ?? "—"} />
             <Row label="Způsob platby" value={invoice.payment_method ?? "—"} />
+            {invoice.short_description ? (
+              <Row label="Krátký popis" value={invoice.short_description} />
+            ) : null}
             {invoice.external_invoice_number ? (
               <Row
                 label="Číslo faktury (od účetní)"
@@ -129,9 +147,6 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                 label="Odesláno účetní"
                 value={formatDate(invoice.email_sent_at)}
               />
-            ) : null}
-            {invoice.paid_at ? (
-              <Row label="Zaplaceno" value={formatDate(invoice.paid_at)} />
             ) : null}
           </CardContent>
         </Card>

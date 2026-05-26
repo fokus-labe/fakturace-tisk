@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ISSUED_PAYMENT_METHODS } from "@/lib/validations/invoice";
 
 export const invoiceFormSchema = z.object({
   client_id: z.string().uuid().optional().or(z.literal("")),
@@ -12,7 +13,8 @@ export const invoiceFormSchema = z.object({
   issued_at: z.string().min(1, "Datum vystavení je povinné"),
   due_date: z.string().optional(),
   variable_symbol: z.string().optional(),
-  payment_method: z.string().optional(),
+  payment_method: z.enum(ISSUED_PAYMENT_METHODS).optional(),
+  short_description: z.string().optional(),
   notes: z.string().optional(),
   items: z
     .array(

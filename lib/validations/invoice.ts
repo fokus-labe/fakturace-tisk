@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { clientSchema } from "./client";
 
+export const ISSUED_PAYMENT_METHODS = [
+  "fakturace",
+  "hotovost",
+  "karta",
+  "QR",
+] as const;
+
 export const invoiceItemSchema = z.object({
   description: z.string().min(1, "Popis je povinný").max(500),
   quantity: z.coerce.number().positive("Množství musí být kladné"),
@@ -15,7 +22,8 @@ export const invoiceRequestSchema = z
     issued_at: z.string().optional(),
     due_date: z.string().optional().nullable(),
     variable_symbol: z.string().optional().nullable(),
-    payment_method: z.string().optional().nullable(),
+    payment_method: z.enum(ISSUED_PAYMENT_METHODS).optional(),
+    short_description: z.string().max(200).optional().nullable(),
     notes: z.string().max(2000).optional().nullable(),
     items: z.array(invoiceItemSchema).min(1, "Faktura musí mít alespoň jednu položku"),
     source: z.enum(["manual", "eshop_api"]).default("manual"),
@@ -36,13 +44,14 @@ export const invoiceStatusUpdateSchema = z.object({
       "draft",
       "sent_to_accountant",
       "invoice_issued",
-      "paid",
       "archived",
       "cancelled",
     ])
     .optional(),
   external_invoice_number: z.string().max(50).optional().nullable(),
-  paid_at: z.string().optional().nullable(),
+  invoice_issued_at: z.string().optional().nullable(),
+  payment_method: z.enum(ISSUED_PAYMENT_METHODS).optional(),
+  short_description: z.string().max(200).optional().nullable(),
 });
 
 export type InvoiceStatusUpdateInput = z.infer<typeof invoiceStatusUpdateSchema>;

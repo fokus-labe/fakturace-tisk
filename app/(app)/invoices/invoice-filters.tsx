@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -16,7 +17,6 @@ const STATUS_OPTIONS = [
   { value: "draft", label: "Koncept" },
   { value: "sent_to_accountant", label: "U účetní" },
   { value: "invoice_issued", label: "Vystavené" },
-  { value: "paid", label: "Zaplacené" },
   { value: "archived", label: "Archiv" },
   { value: "cancelled", label: "Zrušené" },
 ];
@@ -24,9 +24,14 @@ const STATUS_OPTIONS = [
 interface Props {
   initialStatus?: string;
   initialQ?: string;
+  initialShowArchived?: boolean;
 }
 
-export function InvoiceFilters({ initialStatus, initialQ }: Props) {
+export function InvoiceFilters({
+  initialStatus,
+  initialQ,
+  initialShowArchived,
+}: Props) {
   const router = useRouter();
   const params = useSearchParams();
   const [q, setQ] = useState(initialQ ?? "");
@@ -49,11 +54,23 @@ export function InvoiceFilters({ initialStatus, initialQ }: Props) {
     router.push(`/invoices?${next.toString()}`);
   }
 
+  function toggleArchived(checked: boolean) {
+    const next = new URLSearchParams(params.toString());
+    if (checked) next.set("show_archived", "1");
+    else next.delete("show_archived");
+    router.push(`/invoices?${next.toString()}`);
+  }
+
   return (
-    <div className="flex gap-3 flex-wrap">
+    <div className="flex gap-3 flex-wrap items-end">
       <Select value={initialStatus ?? "all"} onValueChange={handleStatus}>
         <SelectTrigger className="w-56">
-          <SelectValue />
+          <SelectValue>
+            {(value: string | null) =>
+              STATUS_OPTIONS.find((o) => o.value === value)?.label ??
+              "Všechny statusy"
+            }
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {STATUS_OPTIONS.map((o) => (
@@ -69,6 +86,15 @@ export function InvoiceFilters({ initialStatus, initialQ }: Props) {
         onChange={(e) => setQ(e.target.value)}
         className="max-w-xs"
       />
+      <Label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={!!initialShowArchived}
+          onChange={(e) => toggleArchived(e.target.checked)}
+          className="size-4 rounded border-input"
+        />
+        Zobrazit i archivované
+      </Label>
     </div>
   );
 }

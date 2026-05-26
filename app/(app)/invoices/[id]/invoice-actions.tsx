@@ -6,12 +6,12 @@ import { toast } from "sonner";
 import {
   Download,
   Mail,
-  Check,
   Ban,
   FileCheck,
   ClipboardCopy,
   FileText,
   Send,
+  Archive,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,12 +26,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { formatDateInput } from "@/lib/utils/format";
 import type { InvoiceStatus } from "@/types/invoice";
 
 interface Props {
   invoiceId: string;
   status: InvoiceStatus;
   externalInvoiceNumber: string | null;
+  invoiceIssuedAt: string | null;
 }
 
 interface PreparedPayload {
@@ -45,11 +47,16 @@ export function InvoiceActions({
   invoiceId,
   status,
   externalInvoiceNumber,
+  invoiceIssuedAt,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
   const [issuedOpen, setIssuedOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [extNumber, setExtNumber] = useState(externalInvoiceNumber ?? "");
+  const [issuedDate, setIssuedDate] = useState(
+    invoiceIssuedAt ?? formatDateInput(new Date()),
+  );
   const [prepared, setPrepared] = useState<PreparedPayload | null>(null);
 
   async function patch(body: Record<string, unknown>, label: string) {
@@ -65,7 +72,6 @@ export function InvoiceActions({
       toast.error("Operace selhala", { description: j?.error });
       return false;
     }
-    toast.success("Hotovo");
     router.refresh();
     return true;
   }
@@ -112,12 +118,36 @@ export function InvoiceActions({
       toast.error("Zadej číslo faktury");
       return;
     }
-    await patch(
-      { status: "invoice_issued", external_invoice_number: extNumber.trim() },
+    if (!issuedDate) {
+      toast.error("Zadej datum vystavení");
+      return;
+    }
+    const ok = await patch(
+      {
+        status: "invoice_issued",
+        external_invoice_number: extNumber.trim(),
+        invoice_issued_at: issuedDate,
+      },
       "issued",
     );
-    setIssuedOpen(false);
+    if (ok) {
+      setIssuedOpen(false);
+      toast.success(`Faktura ${extNumber.trim()} zaznamenána`);
+    }
   }
+
+  async function archive() {
+    const ok = await patch({ status: "archived" }, "archive");
+    if (ok) {
+      setArchiveOpen(false);
+      toast.success("Faktura archivována");
+    }
+  }
+
+  const canPrepare = status === "draft";
+  const canMarkIssued = status === "sent_to_accountant";
+  const canArchive = status === "invoice_issued";
+  const canCancel = status !== "cancelled" && status !== "archived";
 
   return (
     <div className="space-y-4">
@@ -132,87 +162,112 @@ export function InvoiceActions({
           Stáhnout PDF
         </a>
 
-        <Button
-          size="sm"
-          onClick={prepare}
-          disabled={
-            pending === "prepare" ||
-            status === "cancelled" ||
-            status !== "draft"
-          }
-        >
-          <FileText className="size-4 mr-2" />
-          {pending === "prepare" ? "Připravuji…" : "Připravit podklady"}
-        </Button>
+        {canPrepare ? (
+          <Button
+            size="sm"
+            onClick={prepare}
+            disabled={pending === "prepare"}
+          >
+            <FileText className="size-4 mr-2" />
+            {pending === "prepare" ? "Připravuji…" : "Připravit podklady"}
+          </Button>
+        ) : null}
 
-        <Dialog open={issuedOpen} onOpenChange={setIssuedOpen}>
-          <DialogTrigger
-            render={
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={
-                  status === "cancelled" ||
-                  status === "paid" ||
-                  status === "draft"
-                }
-              >
-                <FileCheck className="size-4 mr-2" />
-                Označit jako vystavená
-              </Button>
-            }
-          />
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Označit jako vystavená</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-2">
-              <Label htmlFor="ext">Číslo faktury od účetní</Label>
-              <Input
-                id="ext"
-                value={extNumber}
-                onChange={(e) => setExtNumber(e.target.value)}
-                placeholder="např. 2026-0123"
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIssuedOpen(false)}>
-                Zrušit
-              </Button>
-              <Button onClick={saveIssued} disabled={pending === "issued"}>
-                Uložit
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {canMarkIssued ? (
+          <Dialog open={issuedOpen} onOpenChange={setIssuedOpen}>
+            <DialogTrigger
+              render={
+                <Button size="sm" variant="outline">
+                  <FileCheck className="size-4 mr-2" />
+                  Označit jako vystavená
+                </Button>
+              }
+            />
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Faktura vystavena</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Petr fakturu vystavil v účetním softwaru. Zaznamenej její údaje:
+              </p>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ext">Číslo faktury *</Label>
+                  <Input
+                    id="ext"
+                    value={extNumber}
+                    onChange={(e) => setExtNumber(e.target.value)}
+                    placeholder="např. FV20260001"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Příklad: FV20260001
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="issued-date">Datum vystavení *</Label>
+                  <Input
+                    id="issued-date"
+                    type="date"
+                    value={issuedDate}
+                    onChange={(e) => setIssuedDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIssuedOpen(false)}>
+                  Zrušit
+                </Button>
+                <Button onClick={saveIssued} disabled={pending === "issued"}>
+                  Potvrdit
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : null}
 
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={
-            pending === "paid" ||
-            status === "paid" ||
-            status === "cancelled" ||
-            status === "draft"
-          }
-          onClick={() => patch({ status: "paid" }, "paid")}
-        >
-          <Check className="size-4 mr-2" />
-          Označit zaplacenou
-        </Button>
+        {canArchive ? (
+          <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+            <DialogTrigger
+              render={
+                <Button size="sm" variant="outline">
+                  <Archive className="size-4 mr-2" />
+                  Archivovat
+                </Button>
+              }
+            />
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Archivovat fakturu?</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Archivované faktury jsou v seznamu defaultně skryté.
+              </p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setArchiveOpen(false)}>
+                  Zrušit
+                </Button>
+                <Button onClick={archive} disabled={pending === "archive"}>
+                  Archivovat
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : null}
 
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={pending === "cancel" || status === "cancelled"}
-          onClick={() => {
-            if (confirm("Opravdu zrušit?"))
-              patch({ status: "cancelled" }, "cancel");
-          }}
-        >
-          <Ban className="size-4 mr-2" />
-          Zrušit
-        </Button>
+        {canCancel ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={pending === "cancel"}
+            onClick={() => {
+              if (confirm("Opravdu zrušit?"))
+                patch({ status: "cancelled" }, "cancel");
+            }}
+          >
+            <Ban className="size-4 mr-2" />
+            Zrušit
+          </Button>
+        ) : null}
       </div>
 
       {prepared ? (

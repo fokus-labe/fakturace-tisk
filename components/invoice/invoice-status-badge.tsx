@@ -8,7 +8,6 @@ const meta: Record<
   draft: { label: "Koncept", variant: "outline" },
   sent_to_accountant: { label: "U účetní", variant: "secondary" },
   invoice_issued: { label: "Vystavená", variant: "default" },
-  paid: { label: "Zaplacená", variant: "default" },
   archived: { label: "Archivovaná", variant: "secondary" },
   cancelled: { label: "Zrušená", variant: "destructive" },
 };
