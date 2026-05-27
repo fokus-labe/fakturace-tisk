@@ -53,6 +53,8 @@ interface Props {
   initialPreset: DatePreset;
   initialFrom: string;
   initialTo: string;
+  initialSortBy: string;
+  initialSortDir: "asc" | "desc";
 }
 
 export function ReceivedInvoiceFilters({
@@ -62,6 +64,8 @@ export function ReceivedInvoiceFilters({
   initialPreset,
   initialFrom,
   initialTo,
+  initialSortBy,
+  initialSortDir,
 }: Props) {
   const router = useRouter();
   const params = useSearchParams();
@@ -150,7 +154,9 @@ export function ReceivedInvoiceFilters({
     (initialStatus ?? "") !== "" ||
     (initialCategory ?? "") !== "" ||
     (initialQ ?? "") !== "" ||
-    initialPreset !== "this_year";
+    initialPreset !== "this_year" ||
+    initialSortBy !== "issued_at" ||
+    initialSortDir !== "asc";
 
   return (
     <div className="space-y-3">

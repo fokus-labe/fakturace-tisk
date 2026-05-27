@@ -15,6 +15,8 @@ import { createClient } from "@/lib/supabase/server";
 import { calculateInvoiceTotals } from "@/lib/utils/vat";
 import { formatCZK, formatDate } from "@/lib/utils/format";
 import { InvoiceStatusBadge } from "@/components/invoice/invoice-status-badge";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { SortSelect } from "@/components/ui/sort-select";
 import { InvoiceFilters } from "./invoice-filters";
 import { presetToRange, type DatePreset } from "@/lib/date-range/presets";
 import type { InvoiceStatus } from "@/types/invoice";
@@ -27,6 +29,8 @@ interface PageProps {
     preset?: string;
     from?: string;
     to?: string;
+    sort_by?: string;
+    sort_dir?: string;
   }>;
 }
 
@@ -47,6 +51,31 @@ const STATUSES: InvoiceStatus[] = [
   "cancelled",
 ];
 
+const DB_SORT_FIELDS = [
+  "issued_at",
+  "due_date",
+  "variable_symbol",
+  "status",
+  "payment_method",
+] as const;
+
+const JS_SORT_FIELDS = ["client_name", "total"] as const;
+
+const ALL_SORT_FIELDS = [...DB_SORT_FIELDS, ...JS_SORT_FIELDS] as string[];
+
+const DEFAULT_SORT_FIELD = "issued_at";
+const DEFAULT_SORT_DIR = "asc";
+
+const MOBILE_SORT_OPTIONS = [
+  { value: "issued_at|asc", label: "Datum (nejstarší)" },
+  { value: "issued_at|desc", label: "Datum (nejnovější)" },
+  { value: "client_name|asc", label: "Klient (A–Z)" },
+  { value: "client_name|desc", label: "Klient (Z–A)" },
+  { value: "total|desc", label: "Částka (od nejvyšší)" },
+  { value: "total|asc", label: "Částka (od nejnižší)" },
+  { value: "due_date|asc", label: "Splatnost (nejstarší)" },
+];
+
 export default async function InvoicesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const status = sp.status && (STATUSES as string[]).includes(sp.status)
@@ -63,17 +92,29 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
   const from = presetRange ? presetRange.from : (sp.from ?? "");
   const to = presetRange ? presetRange.to : (sp.to ?? "");
 
+  const sortBy = sp.sort_by && ALL_SORT_FIELDS.includes(sp.sort_by)
+    ? sp.sort_by
+    : DEFAULT_SORT_FIELD;
+  const sortDir: "asc" | "desc" =
+    sp.sort_dir === "desc" ? "desc" : sp.sort_dir === "asc" ? "asc" : DEFAULT_SORT_DIR;
+
   const supabase = await createClient();
   let query = supabase
     .from("invoice_requests")
     .select("*, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)")
-    .order("issued_at", { ascending: false })
-    .order("created_at", { ascending: false })
     .limit(200);
+
   if (status) query = query.eq("status", status);
   else if (!showArchived) query = query.neq("status", "archived");
   if (from) query = query.gte("issued_at", from);
   if (to) query = query.lte("issued_at", to);
+
+  // DB sort pouze pro přímé sloupce; pro client_name/total se řadí v JS níže
+  if ((DB_SORT_FIELDS as readonly string[]).includes(sortBy)) {
+    query = query.order(sortBy, { ascending: sortDir === "asc" });
+  }
+  query = query.order("created_at", { ascending: false });
+
   const { data } = await query;
   let invoices = data ?? [];
   if (q) {
@@ -82,7 +123,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
     );
   }
 
-  const invoicesWithTotals = invoices.map((inv) => {
+  let invoicesWithTotals = invoices.map((inv) => {
     const items = (inv.items ?? []).map(
       (it: {
         quantity: number | string;
@@ -99,6 +140,26 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
       inv.status === "invoice_issued" || inv.status === "archived";
     return { inv, totals, showPayment };
   });
+
+  if (sortBy === "client_name") {
+    const dirMul = sortDir === "asc" ? 1 : -1;
+    invoicesWithTotals = invoicesWithTotals
+      .slice()
+      .sort(
+        (a, b) =>
+          dirMul *
+          (a.inv.client?.name ?? "").localeCompare(
+            b.inv.client?.name ?? "",
+            "cs",
+            { sensitivity: "base" },
+          ),
+      );
+  } else if (sortBy === "total") {
+    const dirMul = sortDir === "asc" ? 1 : -1;
+    invoicesWithTotals = invoicesWithTotals
+      .slice()
+      .sort((a, b) => dirMul * (a.totals.withVat - b.totals.withVat));
+  }
 
   return (
     <div className="space-y-6">
@@ -127,6 +188,8 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
         initialPreset={preset}
         initialFrom={from}
         initialTo={to}
+        initialSortBy={sortBy}
+        initialSortDir={sortDir}
       />
 
       {invoicesWithTotals.length === 0 ? (
@@ -139,8 +202,13 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
         </Card>
       ) : (
         <>
-          {/* Mobile: card list */}
+          {/* Mobile: sort dropdown + card list */}
           <div className="md:hidden space-y-2">
+            <SortSelect
+              options={MOBILE_SORT_OPTIONS}
+              defaultField={DEFAULT_SORT_FIELD}
+              defaultDir={DEFAULT_SORT_DIR}
+            />
             {invoicesWithTotals.map(({ inv, totals }) => (
               <Link
                 key={inv.id}
@@ -176,13 +244,35 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Klient</TableHead>
-                    <TableHead>Datum</TableHead>
-                    <TableHead>Splatnost</TableHead>
-                    <TableHead>VS</TableHead>
-                    <TableHead>Způsob platby</TableHead>
-                    <TableHead className="text-right">Částka</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>
+                      <SortableHeader field="client_name" label="Klient" />
+                    </TableHead>
+                    <TableHead>
+                      <SortableHeader field="issued_at" label="Datum" />
+                    </TableHead>
+                    <TableHead>
+                      <SortableHeader field="due_date" label="Splatnost" />
+                    </TableHead>
+                    <TableHead>
+                      <SortableHeader field="variable_symbol" label="VS" />
+                    </TableHead>
+                    <TableHead>
+                      <SortableHeader
+                        field="payment_method"
+                        label="Způsob platby"
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <SortableHeader
+                        field="total"
+                        label="Částka"
+                        align="right"
+                        defaultDir="desc"
+                      />
+                    </TableHead>
+                    <TableHead>
+                      <SortableHeader field="status" label="Status" />
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
