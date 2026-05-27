@@ -13,10 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DateRangeFilter,
-  type DatePreset,
-} from "@/components/ui/date-range-filter";
+import { DateRangeFilter } from "@/components/ui/date-range-filter";
+import type { DatePreset } from "@/lib/date-range/presets";
 import {
   RECEIVED_INVOICE_CATEGORY_LABELS,
   RECEIVED_INVOICE_STATUS_LABELS,

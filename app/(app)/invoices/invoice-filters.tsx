@@ -13,10 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DateRangeFilter,
-  type DatePreset,
-} from "@/components/ui/date-range-filter";
+import { DateRangeFilter } from "@/components/ui/date-range-filter";
+import type { DatePreset } from "@/lib/date-range/presets";
 
 const STORAGE_KEY = "invoicesFilters";
 

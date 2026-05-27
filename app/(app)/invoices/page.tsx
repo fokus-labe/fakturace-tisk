@@ -16,10 +16,7 @@ import { calculateInvoiceTotals } from "@/lib/utils/vat";
 import { formatCZK, formatDate } from "@/lib/utils/format";
 import { InvoiceStatusBadge } from "@/components/invoice/invoice-status-badge";
 import { InvoiceFilters } from "./invoice-filters";
-import {
-  presetToRange,
-  type DatePreset,
-} from "@/components/ui/date-range-filter";
+import { presetToRange, type DatePreset } from "@/lib/date-range/presets";
 import type { InvoiceStatus } from "@/types/invoice";
 
 interface PageProps {

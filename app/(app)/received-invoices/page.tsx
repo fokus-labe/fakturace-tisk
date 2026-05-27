@@ -15,10 +15,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatCZK, formatDate, formatDateInput } from "@/lib/utils/format";
 import { ReceivedInvoiceStatusBadge } from "@/components/received-invoice/received-invoice-status-badge";
 import { ReceivedInvoiceFilters } from "./received-invoice-filters";
-import {
-  presetToRange,
-  type DatePreset,
-} from "@/components/ui/date-range-filter";
+import { presetToRange, type DatePreset } from "@/lib/date-range/presets";
 import {
   RECEIVED_INVOICE_CATEGORY_LABELS,
   RECEIVED_PAYMENT_METHOD_LABELS,
