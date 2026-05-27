@@ -91,15 +91,15 @@ export async function generateEtnXlsx(
   workbook.created = new Date();
   const sheet = workbook.addWorksheet("ETN");
 
-  // === Šířky sloupců (Petr) ===
-  sheet.getColumn(1).width = 9.7;
-  sheet.getColumn(2).width = 11.7;
-  sheet.getColumn(3).width = 14;
-  sheet.getColumn(4).width = 8.5;
-  sheet.getColumn(5).width = 11.7;
-  sheet.getColumn(6).width = 11.7;
-  sheet.getColumn(7).width = 11.7;
-  sheet.getColumn(8).width = 17.4;
+  // === Šířky sloupců (po review Petrova vzoru) ===
+  sheet.getColumn(1).width = 12; // A — číslo dokladu IS Lupa NET
+  sheet.getColumn(2).width = 12; // B — datum
+  sheet.getColumn(3).width = 20; // C — dodavatel
+  sheet.getColumn(4).width = 12; // D — platba
+  sheet.getColumn(5).width = 14; // E — náklady s DPH
+  sheet.getColumn(6).width = 14; // F — náklady bez DPH
+  sheet.getColumn(7).width = 25; // G — stručný popis nákladů
+  sheet.getColumn(8).width = 15; // H
 
   // === Výšky řádků ===
   sheet.getRow(1).height = 15;
@@ -132,11 +132,11 @@ export async function generateEtnXlsx(
   // ============================================================
   // ŘÁDEK 3 — "NÁKLADY"
   // ============================================================
-  sheet.mergeCells("A3:H3");
+  sheet.mergeCells("A3:G3");
   const nakladyLabel = sheet.getCell("A3");
   nakladyLabel.value = "NÁKLADY";
   nakladyLabel.font = FONT_TITLE;
-  nakladyLabel.alignment = { horizontal: "left", vertical: "middle" };
+  nakladyLabel.alignment = { horizontal: "center", vertical: "middle" };
 
   // ============================================================
   // ŘÁDKY 4-5 — SLOUPCOVÉ HLAVIČKY NÁKLADŮ (2-row merged)
@@ -260,11 +260,11 @@ export async function generateEtnXlsx(
   // ============================================================
   // ŘÁDEK 43 — "TRŽBY"
   // ============================================================
-  sheet.mergeCells("A43:H43");
+  sheet.mergeCells("A43:G43");
   const trzbyLabel = sheet.getCell("A43");
   trzbyLabel.value = "TRŽBY";
   trzbyLabel.font = FONT_TITLE;
-  trzbyLabel.alignment = { horizontal: "left", vertical: "middle" };
+  trzbyLabel.alignment = { horizontal: "center", vertical: "middle" };
 
   // ============================================================
   // ŘÁDKY 44-46 — SLOUPCOVÉ HLAVIČKY TRŽEB (3-row struktura)
