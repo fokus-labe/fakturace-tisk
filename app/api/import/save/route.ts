@@ -13,6 +13,7 @@ const itemSchema = z.object({
 });
 
 const invoiceSchema = z.object({
+  filename: z.string().optional().nullable(),
   client: z.object({
     name: z.string().trim().min(1),
     ico: z
@@ -37,6 +38,8 @@ const invoiceSchema = z.object({
     .nullable(),
   payment_method: z.enum(ISSUED_PAYMENT_METHODS).default("fakturace"),
   items: z.array(itemSchema).min(1),
+  tokens_input: z.coerce.number().int().nonnegative().optional(),
+  tokens_output: z.coerce.number().int().nonnegative().optional(),
 });
 
 const batchSchema = z.object({
@@ -47,6 +50,11 @@ function normalizeIco(v: string | null | undefined): string | null {
   if (!v) return null;
   const t = v.trim();
   return t.length === 0 ? null : t;
+}
+
+// Sonnet 4.5 pricing — $3 / M input, $15 / M output
+function estimateCostUsd(tokensIn: number, tokensOut: number): number {
+  return (tokensIn * 3 + tokensOut * 15) / 1_000_000;
 }
 
 export async function POST(req: NextRequest) {
@@ -70,14 +78,19 @@ export async function POST(req: NextRequest) {
   const results = {
     created: 0,
     failed: 0,
-    errors: [] as Array<{ index: number; message: string }>,
+    errors: [] as Array<{ index: number; filename: string | null; message: string }>,
     createdIds: [] as string[],
   };
+  let clientsCreated = 0;
+  let totalTokensIn = 0;
+  let totalTokensOut = 0;
 
   for (let idx = 0; idx < parsed.data.invoices.length; idx++) {
     const inv = parsed.data.invoices[idx];
+    totalTokensIn += inv.tokens_input ?? 0;
+    totalTokensOut += inv.tokens_output ?? 0;
+
     try {
-      // 1) Najdi nebo vytvoř klienta
       const ico = normalizeIco(inv.client.ico);
       let clientId: string;
 
@@ -103,11 +116,12 @@ export async function POST(req: NextRequest) {
             })
             .select("id")
             .single();
-          if (error || !newClient) throw error ?? new Error("Klient insert failed");
+          if (error || !newClient)
+            throw error ?? new Error("Klient insert failed");
           clientId = newClient.id;
+          clientsCreated += 1;
         }
       } else {
-        // Bez IČO — match podle názvu
         const { data: existing } = await supabase
           .from("clients")
           .select("id")
@@ -128,12 +142,13 @@ export async function POST(req: NextRequest) {
             })
             .select("id")
             .single();
-          if (error || !newClient) throw error ?? new Error("Klient insert failed");
+          if (error || !newClient)
+            throw error ?? new Error("Klient insert failed");
           clientId = newClient.id;
+          clientsCreated += 1;
         }
       }
 
-      // 2) Vytvoř invoice_request se statusem archived
       const { data: invoice, error: invErr } = await supabase
         .from("invoice_requests")
         .insert({
@@ -148,6 +163,7 @@ export async function POST(req: NextRequest) {
           source: "manual",
           source_metadata: {
             imported: true,
+            filename: inv.filename ?? null,
             import_date: new Date().toISOString(),
           },
           created_by: user.id,
@@ -157,7 +173,6 @@ export async function POST(req: NextRequest) {
       if (invErr || !invoice)
         throw invErr ?? new Error("Invoice insert failed");
 
-      // 3) Položky
       const itemsRows = inv.items.map((it, i) => ({
         invoice_request_id: invoice.id,
         description: it.description,
@@ -170,7 +185,6 @@ export async function POST(req: NextRequest) {
         .from("invoice_items")
         .insert(itemsRows);
       if (itemsErr) {
-        // rollback faktury, aby nezůstávaly prázdné záznamy
         await supabase.from("invoice_requests").delete().eq("id", invoice.id);
         throw itemsErr;
       }
@@ -182,10 +196,63 @@ export async function POST(req: NextRequest) {
       const label = `${inv.client.name} (${inv.external_invoice_number || "bez čísla"})`;
       results.errors.push({
         index: idx,
+        filename: inv.filename ?? null,
         message: `${label}: ${err instanceof Error ? err.message : "Neznámá chyba"}`,
       });
     }
   }
 
-  return NextResponse.json(results);
+  // Audit záznam (best-effort — selhání auditu nesmí shodit save)
+  let importId: string | null = null;
+  try {
+    const estimatedCost =
+      totalTokensIn + totalTokensOut > 0
+        ? Number(estimateCostUsd(totalTokensIn, totalTokensOut).toFixed(4))
+        : null;
+
+    const { data: importRecord, error: auditErr } = await supabase
+      .from("invoice_imports")
+      .insert({
+        imported_by: user.id,
+        file_count: parsed.data.invoices.length,
+        invoice_count_created: results.created,
+        invoice_count_failed: results.failed,
+        client_count_created: clientsCreated,
+        filenames: parsed.data.invoices.map((i) => i.filename ?? "unknown"),
+        errors: results.errors.length > 0 ? results.errors : null,
+        total_tokens_input: totalTokensIn || null,
+        total_tokens_output: totalTokensOut || null,
+        estimated_cost_usd: estimatedCost,
+      })
+      .select("id")
+      .single();
+
+    if (auditErr) {
+      console.warn("[import/save] audit insert failed:", auditErr.message);
+    } else if (importRecord) {
+      importId = importRecord.id;
+      // Propsat import_id do source_metadata vytvořených faktur
+      if (results.createdIds.length > 0) {
+        for (const invId of results.createdIds) {
+          const { data: existing } = await supabase
+            .from("invoice_requests")
+            .select("source_metadata")
+            .eq("id", invId)
+            .single();
+          const merged = {
+            ...(existing?.source_metadata ?? {}),
+            import_id: importId,
+          };
+          await supabase
+            .from("invoice_requests")
+            .update({ source_metadata: merged })
+            .eq("id", invId);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[import/save] audit pipeline error:", err);
+  }
+
+  return NextResponse.json({ ...results, importId });
 }

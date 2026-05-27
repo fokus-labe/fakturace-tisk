@@ -34,6 +34,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { formatCZK } from "@/lib/utils/format";
+import { ImportHistory } from "./import-history";
 
 type Confidence = "high" | "medium" | "low";
 type PaymentMethod = "fakturace" | "hotovost" | "karta" | "QR";
@@ -116,6 +117,7 @@ export function ImportClient() {
   const [saving, setSaving] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addFiles = useCallback(
@@ -294,6 +296,7 @@ export function ImportClient() {
     try {
       const payload = {
         invoices: approved.map((r) => ({
+          filename: r.filename,
           client: {
             name: r.data!.client.name,
             ico: r.data!.client.ico || null,
@@ -308,6 +311,8 @@ export function ImportClient() {
           due_date: r.data!.due_date || null,
           payment_method: r.data!.payment_method,
           items: r.data!.items,
+          tokens_input: r.usage?.input_tokens,
+          tokens_output: r.usage?.output_tokens,
         })),
       };
       const res = await fetch("/api/import/save", {
@@ -340,6 +345,7 @@ export function ImportClient() {
       setResults((prev) =>
         prev.filter((_, i) => failedIndices.has(i) || !approvedIndices.includes(i)),
       );
+      setHistoryKey((k) => k + 1);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Uložení selhalo");
     } finally {
@@ -599,6 +605,10 @@ export function ImportClient() {
           </CardContent>
         </Card>
       )}
+
+      <Separator className="my-4" />
+
+      <ImportHistory refreshKey={historyKey} />
 
       {/* Edit dialog */}
       <Dialog

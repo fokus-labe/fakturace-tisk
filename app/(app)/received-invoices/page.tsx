@@ -16,6 +16,10 @@ import { formatCZK, formatDate, formatDateInput } from "@/lib/utils/format";
 import { ReceivedInvoiceStatusBadge } from "@/components/received-invoice/received-invoice-status-badge";
 import { ReceivedInvoiceFilters } from "./received-invoice-filters";
 import {
+  presetToRange,
+  type DatePreset,
+} from "@/components/ui/date-range-filter";
+import {
   RECEIVED_INVOICE_CATEGORY_LABELS,
   RECEIVED_PAYMENT_METHOD_LABELS,
   type ReceivedInvoiceCategory,
@@ -28,10 +32,20 @@ interface PageProps {
     status?: string;
     category?: string;
     q?: string;
+    preset?: string;
     from?: string;
     to?: string;
   }>;
 }
+
+const DATE_PRESETS: DatePreset[] = [
+  "all",
+  "this_month",
+  "last_month",
+  "this_year",
+  "last_year",
+  "custom",
+];
 
 const STATUSES: ReceivedInvoiceStatus[] = [
   "draft",
@@ -63,16 +77,25 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
       : undefined;
   const q = sp.q?.trim().toLowerCase();
 
+  const preset: DatePreset =
+    sp.preset && (DATE_PRESETS as string[]).includes(sp.preset)
+      ? (sp.preset as DatePreset)
+      : "this_year";
+  const presetRange = preset === "custom" ? null : presetToRange(preset);
+  const from = presetRange ? presetRange.from : (sp.from ?? "");
+  const to = presetRange ? presetRange.to : (sp.to ?? "");
+
   const supabase = await createClient();
   let query = supabase
     .from("received_invoices")
     .select("*, supplier:suppliers(id, name)")
     .order("issued_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(300);
   if (status) query = query.eq("status", status);
   if (category) query = query.eq("category", category);
-  if (sp.from) query = query.gte("issued_at", sp.from);
-  if (sp.to) query = query.lte("issued_at", sp.to);
+  if (from) query = query.gte("issued_at", from);
+  if (to) query = query.lte("issued_at", to);
 
   const { data } = await query;
   let invoices = data ?? [];
@@ -119,8 +142,9 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
         initialStatus={status}
         initialCategory={category}
         initialQ={sp.q ?? ""}
-        initialFrom={sp.from ?? ""}
-        initialTo={sp.to ?? ""}
+        initialPreset={preset}
+        initialFrom={from}
+        initialTo={to}
       />
 
       {enriched.length === 0 ? (

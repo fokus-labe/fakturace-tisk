@@ -16,11 +16,31 @@ import { calculateInvoiceTotals } from "@/lib/utils/vat";
 import { formatCZK, formatDate } from "@/lib/utils/format";
 import { InvoiceStatusBadge } from "@/components/invoice/invoice-status-badge";
 import { InvoiceFilters } from "./invoice-filters";
+import {
+  presetToRange,
+  type DatePreset,
+} from "@/components/ui/date-range-filter";
 import type { InvoiceStatus } from "@/types/invoice";
 
 interface PageProps {
-  searchParams: Promise<{ status?: string; q?: string; show_archived?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    q?: string;
+    show_archived?: string;
+    preset?: string;
+    from?: string;
+    to?: string;
+  }>;
 }
+
+const DATE_PRESETS: DatePreset[] = [
+  "all",
+  "this_month",
+  "last_month",
+  "this_year",
+  "last_year",
+  "custom",
+];
 
 const STATUSES: InvoiceStatus[] = [
   "draft",
@@ -38,14 +58,25 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
   const q = sp.q?.trim().toLowerCase();
   const showArchived = sp.show_archived === "1";
 
+  const preset: DatePreset =
+    sp.preset && (DATE_PRESETS as string[]).includes(sp.preset)
+      ? (sp.preset as DatePreset)
+      : "this_year";
+  const presetRange = preset === "custom" ? null : presetToRange(preset);
+  const from = presetRange ? presetRange.from : (sp.from ?? "");
+  const to = presetRange ? presetRange.to : (sp.to ?? "");
+
   const supabase = await createClient();
   let query = supabase
     .from("invoice_requests")
     .select("*, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)")
+    .order("issued_at", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(200);
   if (status) query = query.eq("status", status);
   else if (!showArchived) query = query.neq("status", "archived");
+  if (from) query = query.gte("issued_at", from);
+  if (to) query = query.lte("issued_at", to);
   const { data } = await query;
   let invoices = data ?? [];
   if (q) {
@@ -96,6 +127,9 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
         initialStatus={status}
         initialQ={sp.q ?? ""}
         initialShowArchived={showArchived}
+        initialPreset={preset}
+        initialFrom={from}
+        initialTo={to}
       />
 
       {invoicesWithTotals.length === 0 ? (

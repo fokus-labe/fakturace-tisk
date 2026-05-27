@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Upload } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,6 +68,17 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
             VS {invoice.variable_symbol ?? "—"} ·{" "}
             {formatDate(invoice.issued_at)}
           </p>
+          {invoice.source_metadata?.imported ? (
+            <div className="mt-2 inline-flex items-center gap-2 rounded-md bg-muted px-3 py-1.5 text-xs text-muted-foreground">
+              <Upload className="size-3.5" />
+              <span>Importováno přes OCR</span>
+              {invoice.source_metadata.import_date ? (
+                <span className="font-mono">
+                  {formatDate(invoice.source_metadata.import_date)}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <Card>
