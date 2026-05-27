@@ -14,10 +14,16 @@ export interface EtnWarning {
   type:
     | "unpaid_received"
     | "draft_issued"
-    | "sent_to_accountant_issued";
+    | "sent_to_accountant_issued"
+    | "row_overflow_received"
+    | "row_overflow_issued";
   message: string;
   count: number;
 }
+
+// Fixní rozsahy Petrovy šablony — drž sync s lib/etn/generate-xlsx.ts
+const ETN_MAX_RECEIVED = 36;
+const ETN_MAX_ISSUED = 12;
 
 function inPeriod(
   iso: string | null,
@@ -148,8 +154,28 @@ export async function fetchEtnPeriodData(
         short_description: inv.short_description ?? null,
         client_name: inv.client?.name ?? "",
         external_invoice_number: inv.external_invoice_number ?? null,
+        variable_symbol: inv.variable_symbol ?? null,
       };
     });
+
+  if (receivedInvoices.length > ETN_MAX_RECEIVED) {
+    warnings.push({
+      type: "row_overflow_received",
+      message:
+        `ETN šablona má místo pro ${ETN_MAX_RECEIVED} nákladů, máš ${receivedInvoices.length}. ` +
+        `Vygenerovaný soubor obsahuje jen prvních ${ETN_MAX_RECEIVED} — zúžit období.`,
+      count: receivedInvoices.length,
+    });
+  }
+  if (issuedInvoices.length > ETN_MAX_ISSUED) {
+    warnings.push({
+      type: "row_overflow_issued",
+      message:
+        `ETN šablona má místo pro ${ETN_MAX_ISSUED} tržeb, máš ${issuedInvoices.length}. ` +
+        `Vygenerovaný soubor obsahuje jen prvních ${ETN_MAX_ISSUED} — zúžit období.`,
+      count: issuedInvoices.length,
+    });
+  }
 
   return { receivedInvoices, issuedInvoices, warnings };
 }
