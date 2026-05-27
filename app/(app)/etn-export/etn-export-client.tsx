@@ -224,7 +224,11 @@ export function EtnExportClient() {
             <DatePickerField label="Od datum *" value={from} onChange={setFrom} />
             <DatePickerField label="Do datum *" value={to} onChange={setTo} />
           </div>
-          <Button onClick={fetchPreview} disabled={loadingPreview}>
+          <Button
+            onClick={fetchPreview}
+            disabled={loadingPreview}
+            className="w-full sm:w-auto"
+          >
             {loadingPreview ? (
               <>
                 <Loader2 className="size-4 mr-2 animate-spin" />
@@ -286,6 +290,7 @@ export function EtnExportClient() {
                   Žádné přijaté faktury v období.
                 </p>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader className="bg-muted/50">
                     <TableRow>
@@ -321,6 +326,7 @@ export function EtnExportClient() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -350,6 +356,7 @@ export function EtnExportClient() {
                   Žádné vystavené faktury v období.
                 </p>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader className="bg-muted/50">
                     <TableRow>
@@ -390,19 +397,25 @@ export function EtnExportClient() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => setPreview(null)}
               disabled={downloading}
+              className="w-full sm:w-auto"
             >
               Zrušit náhled
             </Button>
-            <Button onClick={downloadXlsx} disabled={downloading}>
+            <Button
+              onClick={downloadXlsx}
+              disabled={downloading}
+              className="w-full sm:w-auto"
+            >
               {downloading ? (
                 <>
                   <Loader2 className="size-4 mr-2 animate-spin" />
@@ -433,6 +446,7 @@ export function EtnExportClient() {
         ) : (
           <Card>
             <CardContent className="p-0">
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>
@@ -503,6 +517,7 @@ export function EtnExportClient() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         )}

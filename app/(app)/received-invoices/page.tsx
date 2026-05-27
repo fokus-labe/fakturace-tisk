@@ -84,9 +84,20 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
     );
   }
 
+  const today = formatDateInput(new Date());
+  const enriched = invoices.map((inv) => {
+    const overdue =
+      !!inv.due_date &&
+      inv.due_date < today &&
+      inv.status !== "paid" &&
+      inv.status !== "archived" &&
+      inv.status !== "cancelled";
+    return { inv, overdue };
+  });
+
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             Přijaté faktury
@@ -95,7 +106,10 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
             Evidence výdajů od dodavatelů.
           </p>
         </div>
-        <Link href="/received-invoices/new" className={cn(buttonVariants())}>
+        <Link
+          href="/received-invoices/new"
+          className={cn(buttonVariants(), "w-full sm:w-auto")}
+        >
           <Plus className="size-4 mr-2" />
           Nová přijatá faktura
         </Link>
@@ -109,14 +123,68 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
         initialTo={sp.to ?? ""}
       />
 
-      <Card>
-        <CardContent className="p-0">
-          {invoices.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-6">
+      {enriched.length === 0 ? (
+        <Card>
+          <CardContent>
+            <p className="text-sm text-muted-foreground p-6 text-center">
               Žádné přijaté faktury neodpovídají filtru.
             </p>
-          ) : (
-            <Table>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Mobile: card list */}
+          <div className="md:hidden space-y-2">
+            {enriched.map(({ inv, overdue }) => (
+              <Link
+                key={inv.id}
+                href={`/received-invoices/${inv.id}`}
+                className={cn(
+                  "block rounded-lg border bg-card p-4 transition-colors active:bg-muted/30",
+                  overdue && "border-red-300 bg-red-50/60",
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">
+                      {inv.supplier?.name ?? "—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {inv.description}
+                    </p>
+                  </div>
+                  <ReceivedInvoiceStatusBadge status={inv.status} />
+                </div>
+                <div className="mt-3 flex items-center justify-between text-sm">
+                  <div className="flex flex-col text-xs">
+                    <span className="text-muted-foreground tabular-nums">
+                      {formatDate(inv.issued_at)}
+                    </span>
+                    {inv.due_date ? (
+                      <span
+                        className={cn(
+                          "tabular-nums",
+                          overdue
+                            ? "text-red-700 font-medium"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        splatnost {formatDate(inv.due_date)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <span className="font-mono tabular-nums font-medium">
+                    {formatCZK(Number(inv.amount_total))}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* Desktop: table */}
+          <Card className="hidden md:block">
+            <CardContent className="p-0">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Dodavatel</TableHead>
@@ -131,75 +199,66 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invoices.map((inv) => {
-                  const today = formatDateInput(new Date());
-                  const overdue =
-                    inv.due_date &&
-                    inv.due_date < today &&
-                    inv.status !== "paid" &&
-                    inv.status !== "archived" &&
-                    inv.status !== "cancelled";
-                  return (
-                    <TableRow
-                      key={inv.id}
+                {enriched.map(({ inv, overdue }) => (
+                  <TableRow
+                    key={inv.id}
+                    className={cn(
+                      overdue && "bg-red-50/60 hover:bg-red-50",
+                    )}
+                  >
+                    <TableCell>
+                      <Link
+                        href={`/received-invoices/${inv.id}`}
+                        className="hover:underline"
+                      >
+                        {inv.supplier?.name ?? "—"}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {inv.supplier_invoice_number ?? "—"}
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {formatDate(inv.issued_at)}
+                    </TableCell>
+                    <TableCell
                       className={cn(
-                        overdue &&
-                          "bg-red-50/60 hover:bg-red-50 dark:bg-red-950/20 dark:hover:bg-red-950/30",
+                        "tabular-nums",
+                        overdue && "text-red-700 font-medium",
                       )}
                     >
-                      <TableCell>
-                        <Link
-                          href={`/received-invoices/${inv.id}`}
-                          className="hover:underline"
-                        >
-                          {inv.supplier?.name ?? "—"}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {inv.supplier_invoice_number ?? "—"}
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {formatDate(inv.issued_at)}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          "tabular-nums",
-                          overdue && "text-red-700 dark:text-red-400 font-medium",
-                        )}
-                      >
-                        {formatDate(inv.due_date)}
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {inv.description}
-                      </TableCell>
-                      <TableCell>
-                        {
-                          RECEIVED_INVOICE_CATEGORY_LABELS[
-                            inv.category as ReceivedInvoiceCategory
-                          ]
-                        }
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatCZK(Number(inv.amount_total))}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {
-                          RECEIVED_PAYMENT_METHOD_LABELS[
-                            inv.payment_method as ReceivedPaymentMethod
-                          ]
-                        }
-                      </TableCell>
-                      <TableCell>
-                        <ReceivedInvoiceStatusBadge status={inv.status} />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                      {formatDate(inv.due_date)}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">
+                      {inv.description}
+                    </TableCell>
+                    <TableCell>
+                      {
+                        RECEIVED_INVOICE_CATEGORY_LABELS[
+                          inv.category as ReceivedInvoiceCategory
+                        ]
+                      }
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatCZK(Number(inv.amount_total))}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {
+                        RECEIVED_PAYMENT_METHOD_LABELS[
+                          inv.payment_method as ReceivedPaymentMethod
+                        ]
+                      }
+                    </TableCell>
+                    <TableCell>
+                      <ReceivedInvoiceStatusBadge status={inv.status} />
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        </>
+      )}
     </div>
   );
 }

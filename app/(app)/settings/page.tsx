@@ -123,7 +123,29 @@ export default async function SettingsPage() {
             mohou editovat všechna data.
           </p>
 
-          <div className="border rounded-md overflow-hidden">
+          {/* Mobile: card list */}
+          <div className="md:hidden space-y-2">
+            {users.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                Žádní uživatelé nenačteni.
+              </p>
+            ) : (
+              users.map((u) => (
+                <div
+                  key={u.id}
+                  className="rounded-lg border bg-card p-3"
+                >
+                  <p className="font-mono text-xs truncate">{u.email ?? "—"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                    Naposledy přihlášen: {formatDateTimeCZ(u.last_sign_in_at)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop: table */}
+          <div className="hidden md:block border rounded-md overflow-hidden">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>

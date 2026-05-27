@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut, Settings } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Settings } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +11,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Logo } from "@/components/logo";
+import { SidebarNav } from "@/components/layout/sidebar";
 import { createClient } from "@/lib/supabase/client";
 
 interface HeaderProps {
@@ -27,6 +36,7 @@ function initialsFromEmail(email: string | null): string {
 
 export function Header({ email }: HeaderProps) {
   const router = useRouter();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const initials = initialsFromEmail(email);
 
   async function signOut() {
@@ -37,13 +47,46 @@ export function Header({ email }: HeaderProps) {
   }
 
   return (
-    <header className="flex h-14 items-center justify-between border-b bg-background px-6">
-      <div />
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background px-3 sm:px-6">
+      {/* Mobile: hamburger menu (vlevo) */}
+      <div className="md:hidden">
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Otevřít menu"
+              />
+            }
+          >
+            <Menu className="size-5" />
+          </SheetTrigger>
+          <SheetContent side="left" className="w-72 p-0">
+            <div className="flex h-full flex-col">
+              <div className="px-6 pt-6 pb-4">
+                <Logo width={120} height={50} priority />
+                <p className="mt-2 text-xs uppercase tracking-widest text-muted-foreground">
+                  Fakturace
+                </p>
+              </div>
+              <div className="mx-3 border-b" />
+              <SidebarNav onNavigate={() => setMobileOpen(false)} />
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Desktop: prázdné místo levé strany */}
+      <div className="hidden md:block" />
+
+      {/* User dropdown (vždy vpravo) */}
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
             <button
               type="button"
+              aria-label="Menu uživatele"
               className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             />
           }
@@ -51,7 +94,7 @@ export function Header({ email }: HeaderProps) {
           <div className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">
             {initials}
           </div>
-          <span className="text-muted-foreground hidden sm:inline">
+          <span className="text-muted-foreground hidden sm:inline truncate max-w-[200px]">
             {email ?? ""}
           </span>
           <ChevronDown className="size-4 text-muted-foreground" />

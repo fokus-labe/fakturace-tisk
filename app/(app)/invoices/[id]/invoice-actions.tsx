@@ -162,7 +162,7 @@ export function InvoiceActions({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <a
           href={`/api/invoice-requests/${invoiceId}/pdf`}
           target="_blank"
@@ -170,7 +170,8 @@ export function InvoiceActions({
           className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
         >
           <Download className="size-4 mr-2" />
-          Stáhnout PDF
+          <span className="hidden sm:inline">Stáhnout PDF</span>
+          <span className="sm:hidden">PDF</span>
         </a>
 
         {canPrepare ? (

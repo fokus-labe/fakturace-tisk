@@ -98,14 +98,17 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Přehled</h1>
           <p className="text-sm text-muted-foreground">
             Fakturace pro provozovnu Fokus tisk.
           </p>
         </div>
-        <Link href="/invoices/new" className={cn(buttonVariants())}>
+        <Link
+          href="/invoices/new"
+          className={cn(buttonVariants(), "w-full sm:w-auto")}
+        >
           <Plus className="size-4 mr-2" />
           Nová faktura
         </Link>
@@ -115,7 +118,7 @@ export default async function Dashboard() {
         <h2 className="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">
           Tento měsíc
         </h2>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <div className="rounded-lg border bg-card p-6">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-muted-foreground">
@@ -208,7 +211,7 @@ export default async function Dashboard() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="rounded-lg border bg-card p-5">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               K zaplacení
@@ -239,7 +242,7 @@ export default async function Dashboard() {
         dataNoVat={stats.cashflowNoVat}
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded-lg border">
           <div className="px-4 py-3 border-b">
             <h3 className="text-sm font-semibold">

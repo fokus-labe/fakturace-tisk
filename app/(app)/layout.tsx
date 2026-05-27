@@ -15,11 +15,11 @@ export default async function AppLayout({
   if (!user) redirect("/login");
 
   return (
-    <div className="flex flex-1">
+    <div className="flex flex-1 min-w-0">
       <Sidebar />
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col min-w-0">
         <Header email={user.email ?? null} />
-        <main className="flex-1 px-6 py-8 max-w-6xl w-full mx-auto">
+        <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8 max-w-6xl w-full mx-auto min-w-0">
           {children}
         </main>
       </div>

@@ -164,6 +164,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           <CardTitle className="text-base">Položky</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="overflow-x-auto -mx-6 px-6">
           <Table>
             <TableHeader>
               <TableRow>
@@ -201,6 +202,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               })}
             </TableBody>
           </Table>
+          </div>
           <Separator className="my-4" />
           <div className="flex justify-end">
             <div className="w-full max-w-xs space-y-1 text-sm">
