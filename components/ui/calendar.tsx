@@ -37,12 +37,12 @@ function Calendar({
         month_grid: "w-full border-collapse",
         weekdays: "flex",
         weekday:
-          "w-9 text-[0.7rem] font-normal uppercase tracking-wide text-muted-foreground",
+          "w-10 text-[0.7rem] font-normal uppercase tracking-wide text-muted-foreground",
         week: "flex w-full mt-1",
-        day: "h-9 w-9 text-center text-sm p-0 relative",
+        day: "h-10 w-10 text-center text-sm p-0 relative",
         day_button: cn(
-          buttonVariants({ variant: "ghost", size: "icon-sm" }),
-          "h-9 w-9 p-0 font-normal aria-selected:opacity-100",
+          buttonVariants({ variant: "ghost" }),
+          "size-full p-0 font-normal rounded-md aria-selected:opacity-100",
         ),
         selected:
           "[&_button]:bg-primary [&_button]:text-primary-foreground [&_button:hover]:bg-primary [&_button:hover]:text-primary-foreground",
