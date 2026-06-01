@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -13,6 +14,7 @@ import {
   Send,
   Archive,
   Undo2,
+  Pencil,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -175,6 +177,7 @@ export function InvoiceActions({
     if (ok) toast.success("Faktura vrácena o krok zpět");
   }
 
+  const canEdit = status === "draft";
   const canPrepare = status === "draft";
   const canMarkIssued = status === "sent_to_accountant";
   const canArchive = status === "invoice_issued";
@@ -204,6 +207,16 @@ export function InvoiceActions({
           <span className="hidden sm:inline">Stáhnout PDF</span>
           <span className="sm:hidden">PDF</span>
         </a>
+
+        {canEdit ? (
+          <Link
+            href={`/invoices/${invoiceId}/edit`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          >
+            <Pencil className="size-4 mr-2" />
+            Upravit
+          </Link>
+        ) : null}
 
         {canPrepare ? (
           <Button

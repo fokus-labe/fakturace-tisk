@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { invoiceStatusUpdateSchema } from "@/lib/validations/invoice";
+import {
+  invoiceEditSchema,
+  invoiceStatusUpdateSchema,
+} from "@/lib/validations/invoice";
 import type { InvoiceStatus } from "@/types/invoice";
 
 export const runtime = "nodejs";
@@ -48,6 +51,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
+
+  // Plný edit konceptu — klient, položky, datum, splatnost, VS, atd.
+  if (body && typeof body === "object" && body.action === "edit") {
+    return editDraft(supabase, id, body);
+  }
+
   const parsed = invoiceStatusUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -91,6 +100,82 @@ export async function PATCH(
   return NextResponse.json({ data });
 }
 
+async function editDraft(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  body: unknown,
+) {
+  const parsed = invoiceEditSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid input", details: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+
+  const { data: current, error: fetchErr } = await supabase
+    .from("invoice_requests")
+    .select("status")
+    .eq("id", id)
+    .single();
+  if (fetchErr || !current)
+    return NextResponse.json({ error: "Faktura nenalezena" }, { status: 404 });
+
+  if (current.status !== "draft") {
+    return NextResponse.json(
+      { error: "Lze upravit jen koncepty" },
+      { status: 400 },
+    );
+  }
+
+  const input = parsed.data;
+  const vs =
+    input.variable_symbol && input.variable_symbol.trim().length > 0
+      ? input.variable_symbol.trim()
+      : null;
+
+  const { data: updated, error: updateErr } = await supabase
+    .from("invoice_requests")
+    .update({
+      client_id: input.client_id,
+      issued_at: input.issued_at,
+      due_date: input.due_date ?? null,
+      variable_symbol: vs,
+      payment_method: input.payment_method ?? "fakturace",
+      short_description: input.short_description ?? null,
+      notes: input.notes ?? null,
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (updateErr)
+    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+
+  // Nejjednodušší přístup: smazat všechny položky a vložit znovu.
+  const { error: delErr } = await supabase
+    .from("invoice_items")
+    .delete()
+    .eq("invoice_request_id", id);
+  if (delErr)
+    return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+  const itemsRows = input.items.map((it, idx) => ({
+    invoice_request_id: id,
+    description: it.description,
+    quantity: it.quantity,
+    unit_price_no_vat: it.unit_price_no_vat,
+    vat_rate: it.vat_rate,
+    order_index: idx,
+  }));
+  const { error: insErr } = await supabase
+    .from("invoice_items")
+    .insert(itemsRows);
+  if (insErr)
+    return NextResponse.json({ error: insErr.message }, { status: 500 });
+
+  return NextResponse.json({ data: updated });
+}
+
 async function revertStatus(
   supabase: Awaited<ReturnType<typeof createClient>>,
   id: string,
@@ -115,12 +200,16 @@ async function revertStatus(
 
   // Návrat do konceptu znamená editovatelné položky → existující PDF je
   // zastaralé. Smažeme ho ze storage a vyčistíme odkazy, aby se podklad
-  // při dalším „Připravit podklady" vygeneroval znovu.
-  if (newStatus === "draft" && current.pdf_url) {
-    const path = String(current.pdf_url).replace(/^invoice-pdfs\//, "");
-    const service = createServiceClient();
-    await service.storage.from("invoice-pdfs").remove([path]);
-    patch.pdf_url = null;
+  // při dalším „Připravit podklady" vygeneroval znovu. Stopy po odeslání
+  // účetní také mažeme, aby koncept neukazoval „Odesláno účetní" datum
+  // z předchozího pokusu.
+  if (newStatus === "draft") {
+    if (current.pdf_url) {
+      const path = String(current.pdf_url).replace(/^invoice-pdfs\//, "");
+      const service = createServiceClient();
+      await service.storage.from("invoice-pdfs").remove([path]);
+      patch.pdf_url = null;
+    }
     patch.email_sent_at = null;
     patch.accountant_notified_at = null;
   }

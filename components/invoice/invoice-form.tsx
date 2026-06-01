@@ -36,8 +36,27 @@ import type { Client, IssuedPaymentMethod } from "@/types/invoice";
 
 type ClientLite = Pick<Client, "id" | "name">;
 
+interface InvoiceFormInitial {
+  client_id: string;
+  issued_at: string;
+  due_date: string;
+  variable_symbol: string;
+  payment_method: IssuedPaymentMethod;
+  short_description: string;
+  notes: string;
+  items: {
+    description: string;
+    quantity: number;
+    unit_price_no_vat: number;
+    vat_rate: number;
+  }[];
+}
+
 interface Props {
   clients: ClientLite[];
+  initial?: InvoiceFormInitial;
+  mode?: "create" | "edit";
+  invoiceId?: string;
 }
 
 const NEW_CLIENT_VALUE = "__new__";
@@ -50,7 +69,12 @@ const PAYMENT_METHOD_OPTIONS: { value: IssuedPaymentMethod; label: string }[] =
     { value: "QR", label: "QR" },
   ];
 
-export function InvoiceForm({ clients }: Props) {
+export function InvoiceForm({
+  clients,
+  initial,
+  mode = "create",
+  invoiceId,
+}: Props) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [clientList, setClientList] = useState<ClientLite[]>(clients);
@@ -58,16 +82,29 @@ export function InvoiceForm({ clients }: Props) {
 
   const form = useForm<InvoiceFormInput, unknown, InvoiceFormOutput>({
     resolver: zodResolver(invoiceFormSchema),
-    defaultValues: {
-      client_id: clients[0]?.id ?? "",
-      issued_at: formatDateInput(new Date()),
-      payment_method: "fakturace",
-      due_date: formatDateInput(new Date(Date.now() + 14 * 24 * 3600 * 1000)),
-      short_description: "",
-      items: [
-        { description: "", quantity: 1, unit_price_no_vat: 0, vat_rate: 21 },
-      ],
-    },
+    defaultValues: initial
+      ? {
+          client_id: initial.client_id,
+          issued_at: initial.issued_at,
+          due_date: initial.due_date,
+          variable_symbol: initial.variable_symbol,
+          payment_method: initial.payment_method,
+          short_description: initial.short_description,
+          notes: initial.notes,
+          items: initial.items,
+        }
+      : {
+          client_id: clients[0]?.id ?? "",
+          issued_at: formatDateInput(new Date()),
+          payment_method: "fakturace",
+          due_date: formatDateInput(
+            new Date(Date.now() + 14 * 24 * 3600 * 1000),
+          ),
+          short_description: "",
+          items: [
+            { description: "", quantity: 1, unit_price_no_vat: 0, vat_rate: 21 },
+          ],
+        },
   });
 
   const {
@@ -101,6 +138,38 @@ export function InvoiceForm({ clients }: Props) {
       setSubmitting(false);
       return;
     }
+
+    if (mode === "edit" && invoiceId) {
+      const payload = {
+        action: "edit" as const,
+        client_id: values.client_id,
+        issued_at: values.issued_at,
+        due_date: values.due_date || null,
+        variable_symbol: values.variable_symbol || undefined,
+        payment_method: values.payment_method ?? "fakturace",
+        short_description: values.short_description || null,
+        notes: values.notes || null,
+        items: values.items,
+      };
+      const res = await fetch(`/api/invoice-requests/${invoiceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      setSubmitting(false);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error("Nepodařilo se uložit změny", {
+          description: body?.error,
+        });
+        return;
+      }
+      toast.success("Faktura uložena");
+      router.push(`/invoices/${invoiceId}`);
+      router.refresh();
+      return;
+    }
+
     const payload = {
       client_id: values.client_id,
       issued_at: values.issued_at,
@@ -323,7 +392,11 @@ export function InvoiceForm({ clients }: Props) {
           Zrušit
         </Button>
         <Button type="submit" disabled={submitting}>
-          {submitting ? "Ukládám…" : "Uložit fakturu"}
+          {submitting
+            ? "Ukládám…"
+            : mode === "edit"
+              ? "Uložit změny"
+              : "Uložit fakturu"}
         </Button>
       </div>
     </form>

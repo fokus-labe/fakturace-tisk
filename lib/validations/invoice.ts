@@ -73,3 +73,21 @@ export const invoiceStatusUpdateSchema = z.object({
 });
 
 export type InvoiceStatusUpdateInput = z.infer<typeof invoiceStatusUpdateSchema>;
+
+// Plný edit konceptové faktury — klient, položky, datum, splatnost, VS, atd.
+// Povolen jen pro status === "draft" (vynucuje route handler).
+export const invoiceEditSchema = z.object({
+  action: z.literal("edit"),
+  client_id: z.string().uuid(),
+  issued_at: z.string().min(1, "Datum vystavení je povinné"),
+  due_date: z.string().optional().nullable(),
+  variable_symbol: variableSymbolSchema,
+  payment_method: z.enum(ISSUED_PAYMENT_METHODS).optional(),
+  short_description: z.string().trim().max(200).optional().nullable(),
+  notes: z.string().max(5000).optional().nullable(),
+  items: z
+    .array(invoiceItemSchema)
+    .min(1, "Faktura musí mít alespoň jednu položku"),
+});
+
+export type InvoiceEditInput = z.infer<typeof invoiceEditSchema>;

@@ -161,7 +161,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                 mono
               />
             ) : null}
-            {invoice.email_sent_at ? (
+            {invoice.email_sent_at && invoice.status !== "draft" ? (
               <Row
                 label="Odesláno účetní"
                 value={formatDate(invoice.email_sent_at)}
