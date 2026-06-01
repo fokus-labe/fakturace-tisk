@@ -8,6 +8,16 @@ export const ISSUED_PAYMENT_METHODS = [
   "QR",
 ] as const;
 
+// VS je v ČR čistě číselný (max 10 číslic). Prázdná hodnota je povolená —
+// VS se v konceptu negeneruje a doplní se až později.
+export const variableSymbolSchema = z
+  .string()
+  .trim()
+  .regex(/^\d*$/, "Variabilní symbol smí obsahovat jen číslice")
+  .max(10, "Variabilní symbol smí mít maximálně 10 číslic")
+  .optional()
+  .nullable();
+
 export const invoiceItemSchema = z.object({
   description: z.string().trim().min(1, "Popis je povinný").max(500),
   quantity: z.coerce
@@ -27,7 +37,7 @@ export const invoiceRequestSchema = z
     new_client: clientSchema.optional(),
     issued_at: z.string().optional(),
     due_date: z.string().optional().nullable(),
-    variable_symbol: z.string().optional().nullable(),
+    variable_symbol: variableSymbolSchema,
     payment_method: z.enum(ISSUED_PAYMENT_METHODS).optional(),
     short_description: z.string().trim().max(200).optional().nullable(),
     notes: z.string().max(5000).optional().nullable(),
@@ -56,8 +66,10 @@ export const invoiceStatusUpdateSchema = z.object({
     .optional(),
   external_invoice_number: z.string().trim().max(50).optional().nullable(),
   invoice_issued_at: z.string().optional().nullable(),
+  variable_symbol: variableSymbolSchema,
   payment_method: z.enum(ISSUED_PAYMENT_METHODS).optional(),
   short_description: z.string().trim().max(200).optional().nullable(),
+  action: z.literal("revert").optional(),
 });
 
 export type InvoiceStatusUpdateInput = z.infer<typeof invoiceStatusUpdateSchema>;

@@ -257,10 +257,15 @@ export function InvoiceForm({ clients }: Props) {
           <div className="space-y-1.5">
             <Label>Variabilní symbol</Label>
             <Input
-              placeholder="Auto-generovaný"
+              placeholder="Nepovinné – doplníš později"
+              inputMode="numeric"
               className="font-mono"
               {...register("variable_symbol")}
             />
+            <p className="text-xs text-muted-foreground">
+              V konceptu může zůstat prázdný. Doplníš ho při označení faktury
+              jako vystavené.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label>Způsob platby</Label>

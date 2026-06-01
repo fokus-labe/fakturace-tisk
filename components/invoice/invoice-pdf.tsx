@@ -1,3 +1,4 @@
+import path from "path";
 import {
   Document,
   Page,
@@ -17,19 +18,23 @@ import {
   calculateLineTotal,
 } from "@/lib/utils/vat";
 
+// Lokální Inter font (Latin-Ext kvůli českým znakům). CDN se 404ovalo,
+// proto čteme soubory z public/fonts; výslovně tracované v next.config.
+const FONT_DIR = path.join(process.cwd(), "public", "fonts");
+
 Font.register({
   family: "Inter",
   fonts: [
     {
-      src: "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50ojIa1ZL7.woff",
+      src: path.join(FONT_DIR, "Inter-Regular.woff"),
       fontWeight: 400,
     },
     {
-      src: "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50ojIa1ZL7.woff",
+      src: path.join(FONT_DIR, "Inter-Bold.woff"),
       fontWeight: 600,
     },
     {
-      src: "https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50ojIa1ZL7.woff",
+      src: path.join(FONT_DIR, "Inter-Bold.woff"),
       fontWeight: 700,
     },
   ],

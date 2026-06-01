@@ -65,7 +65,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
             <InvoiceStatusBadge status={invoice.status} />
           </div>
           <p className="text-sm text-muted-foreground">
-            VS {invoice.variable_symbol ?? "—"} ·{" "}
+            VS {invoice.variable_symbol || "—"} ·{" "}
             {formatDate(invoice.issued_at)}
           </p>
           {invoice.source_metadata?.imported ? (
@@ -92,6 +92,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           status={invoice.status}
           externalInvoiceNumber={invoice.external_invoice_number}
           invoiceIssuedAt={invoice.invoice_issued_at}
+          variableSymbol={invoice.variable_symbol}
         />
       </div>
 
@@ -146,7 +147,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
             <Row label="Splatnost" value={formatDate(invoice.due_date)} />
             <Row
               label="Variabilní symbol"
-              value={invoice.variable_symbol ?? "—"}
+              value={invoice.variable_symbol || "—"}
               mono
             />
             <Row label="Způsob platby" value={invoice.payment_method ?? "—"} />

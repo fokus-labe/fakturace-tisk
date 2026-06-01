@@ -1,8 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { invoiceStatusUpdateSchema } from "@/lib/validations/invoice";
+import type { InvoiceStatus } from "@/types/invoice";
 
 export const runtime = "nodejs";
+
+// O jaký stav se faktura vrátí při „Vrátit zpět". Koncept a zrušené nelze
+// vrátit (koncept je první krok, zrušené se musí vytvořit znovu).
+const REVERT_MAP: Partial<Record<InvoiceStatus, InvoiceStatus>> = {
+  sent_to_accountant: "draft",
+  invoice_issued: "sent_to_accountant",
+  archived: "invoice_issued",
+};
 
 export async function GET(
   _req: NextRequest,
@@ -46,7 +55,19 @@ export async function PATCH(
       { status: 400 },
     );
   }
+
+  // „Vrátit zpět" — downgrade stavu o jeden krok zpět ve workflow.
+  if (parsed.data.action === "revert") {
+    return revertStatus(supabase, id);
+  }
+
   const patch: Record<string, unknown> = { ...parsed.data };
+  delete patch.action;
+
+  // Prázdný VS ukládáme jako null (ne ""), ať je zobrazení konzistentní.
+  if (typeof patch.variable_symbol === "string" && patch.variable_symbol === "") {
+    patch.variable_symbol = null;
+  }
 
   // Při přechodu na 'invoice_issued' předvyplnit invoice_issued_at, pokud chybí
   if (patch.status === "invoice_issued" && !patch.invoice_issued_at) {
@@ -68,6 +89,51 @@ export async function PATCH(
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });
+}
+
+async function revertStatus(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+) {
+  const { data: current, error: fetchErr } = await supabase
+    .from("invoice_requests")
+    .select("status, pdf_url")
+    .eq("id", id)
+    .single();
+  if (fetchErr || !current)
+    return NextResponse.json({ error: "Faktura nenalezena" }, { status: 404 });
+
+  const newStatus = REVERT_MAP[current.status as InvoiceStatus];
+  if (!newStatus) {
+    return NextResponse.json(
+      { error: "Tento stav nelze vrátit zpět" },
+      { status: 400 },
+    );
+  }
+
+  const patch: Record<string, unknown> = { status: newStatus };
+
+  // Návrat do konceptu znamená editovatelné položky → existující PDF je
+  // zastaralé. Smažeme ho ze storage a vyčistíme odkazy, aby se podklad
+  // při dalším „Připravit podklady" vygeneroval znovu.
+  if (newStatus === "draft" && current.pdf_url) {
+    const path = String(current.pdf_url).replace(/^invoice-pdfs\//, "");
+    const service = createServiceClient();
+    await service.storage.from("invoice-pdfs").remove([path]);
+    patch.pdf_url = null;
+    patch.email_sent_at = null;
+    patch.accountant_notified_at = null;
+  }
+
+  const { data, error } = await supabase
+    .from("invoice_requests")
+    .update(patch)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error)
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ data, new_status: newStatus });
 }
 
 export async function DELETE(

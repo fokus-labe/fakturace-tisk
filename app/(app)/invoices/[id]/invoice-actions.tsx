@@ -12,6 +12,7 @@ import {
   FileText,
   Send,
   Archive,
+  Undo2,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,7 @@ interface Props {
   status: InvoiceStatus;
   externalInvoiceNumber: string | null;
   invoiceIssuedAt: string | null;
+  variableSymbol: string | null;
 }
 
 interface PreparedPayload {
@@ -54,6 +56,7 @@ export function InvoiceActions({
   status,
   externalInvoiceNumber,
   invoiceIssuedAt,
+  variableSymbol,
 }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
@@ -63,6 +66,7 @@ export function InvoiceActions({
   const [issuedDate, setIssuedDate] = useState(
     invoiceIssuedAt ?? formatDateInput(new Date()),
   );
+  const [vs, setVs] = useState(variableSymbol ?? "");
   const [prepared, setPrepared] = useState<PreparedPayload | null>(null);
 
   async function patch(body: Record<string, unknown>, label: string) {
@@ -128,11 +132,21 @@ export function InvoiceActions({
       toast.error("Zadej datum vystavení");
       return;
     }
+    const vsTrimmed = vs.trim();
+    if (!vsTrimmed) {
+      toast.error("Zadej variabilní symbol");
+      return;
+    }
+    if (!/^\d+$/.test(vsTrimmed)) {
+      toast.error("Variabilní symbol smí obsahovat jen číslice");
+      return;
+    }
     const ok = await patch(
       {
         status: "invoice_issued",
         external_invoice_number: extNumber.trim(),
         invoice_issued_at: issuedDate,
+        variable_symbol: vsTrimmed,
       },
       "issued",
     );
@@ -150,10 +164,27 @@ export function InvoiceActions({
     }
   }
 
+  async function revert() {
+    if (
+      !confirm(
+        "Vrátit fakturu o krok zpět? Bude znovu editovatelná. Vrácení do konceptu smaže vygenerované PDF.",
+      )
+    )
+      return;
+    const ok = await patch({ action: "revert" }, "revert");
+    if (ok) toast.success("Faktura vrácena o krok zpět");
+  }
+
   const canPrepare = status === "draft";
   const canMarkIssued = status === "sent_to_accountant";
   const canArchive = status === "invoice_issued";
   const canCancel = status !== "cancelled" && status !== "archived";
+  // Vrátit zpět lze ze všech postupových stavů kromě konceptu (první krok)
+  // a zrušené faktury (tu nelze obnovit, musí se vytvořit znovu).
+  const canRevert =
+    status === "sent_to_accountant" ||
+    status === "invoice_issued" ||
+    status === "archived";
   // Smazat: jen draft, sent_to_accountant, cancelled — NIKDY invoice_issued / archived
   const canDelete =
     status === "draft" ||
@@ -222,6 +253,20 @@ export function InvoiceActions({
                     onChange={(d) => setIssuedDate(dateToIso(d))}
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="vs">Variabilní symbol *</Label>
+                  <Input
+                    id="vs"
+                    value={vs}
+                    inputMode="numeric"
+                    className="font-mono"
+                    onChange={(e) => setVs(e.target.value)}
+                    placeholder="např. 20260001"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Při vystavení je VS povinný. Doplň ho podle faktury od Petra.
+                  </p>
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIssuedOpen(false)}>
@@ -262,6 +307,18 @@ export function InvoiceActions({
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        ) : null}
+
+        {canRevert ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending === "revert"}
+            onClick={revert}
+          >
+            <Undo2 className="size-4 mr-2" />
+            {pending === "revert" ? "Vracím…" : "Vrátit zpět"}
+          </Button>
         ) : null}
 
         {canCancel ? (

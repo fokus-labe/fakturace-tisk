@@ -5,7 +5,6 @@ import {
   isApiKeyHeader,
 } from "@/lib/auth/api-key";
 import { invoiceRequestSchema } from "@/lib/validations/invoice";
-import { nextVariableSymbol } from "@/lib/utils/invoice-number";
 
 export const runtime = "nodejs";
 
@@ -104,10 +103,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // VS se v konceptu negeneruje automaticky — zůstává prázdné, dokud ho
+  // uživatel nezadá (nejpozději při označení faktury jako vystavené).
   const vs =
-    input.variable_symbol && input.variable_symbol.length > 0
-      ? input.variable_symbol
-      : await nextVariableSymbol(db);
+    input.variable_symbol && input.variable_symbol.trim().length > 0
+      ? input.variable_symbol.trim()
+      : null;
 
   const { data: invoice, error: invErr } = await db
     .from("invoice_requests")
