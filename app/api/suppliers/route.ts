@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supplierSchema } from "@/lib/validations/supplier";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
 
 export const runtime = "nodejs";
 
@@ -15,9 +16,14 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q");
 
+  const venue = await getActiveVenue(searchParams.get("venue") ?? undefined);
+  if (!venue)
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
+
   let query = supabase
     .from("suppliers")
     .select("*")
+    .eq("venue_id", venue.id)
     .order("name", { ascending: true })
     .limit(200);
   if (q) query = query.ilike("name", `%${q}%`);
@@ -44,11 +50,16 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
 
+  const venue = await getActiveVenue(body?.venue_slug);
+  if (!venue)
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
+
   const insert = {
     ...parsed.data,
     email: parsed.data.email || null,
     default_payment_method: parsed.data.default_payment_method || null,
     default_category: parsed.data.default_category || null,
+    venue_id: venue.id,
     created_by: user.id,
   };
 

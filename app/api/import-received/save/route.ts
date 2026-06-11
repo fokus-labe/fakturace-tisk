@@ -6,6 +6,7 @@ import {
   RECEIVED_PAYMENT_METHODS,
 } from "@/lib/validations/supplier";
 import { RECEIVED_INVOICE_STATUSES } from "@/lib/validations/received-invoice";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
 
 export const runtime = "nodejs";
 
@@ -76,6 +77,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const venue = await getActiveVenue(
+    (body as { venue_slug?: string } | null)?.venue_slug,
+  );
+  if (!venue) {
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
+  }
+
   const results = {
     created: 0,
     failed: 0,
@@ -118,6 +126,7 @@ export async function POST(req: NextRequest) {
               address_street: inv.supplier.address_street || null,
               address_city: inv.supplier.address_city || null,
               address_zip: inv.supplier.address_zip || null,
+              venue_id: venue.id,
               created_by: user.id,
             })
             .select("id")
@@ -144,6 +153,7 @@ export async function POST(req: NextRequest) {
               address_street: inv.supplier.address_street || null,
               address_city: inv.supplier.address_city || null,
               address_zip: inv.supplier.address_zip || null,
+              venue_id: venue.id,
               created_by: user.id,
             })
             .select("id")
@@ -165,6 +175,7 @@ export async function POST(req: NextRequest) {
         .from("received_invoices")
         .insert({
           supplier_id: supplierId,
+          venue_id: venue.id,
           supplier_invoice_number: inv.supplier_invoice_number ?? null,
           issued_at: inv.issued_at,
           due_date: inv.due_date ?? null,
@@ -209,6 +220,7 @@ export async function POST(req: NextRequest) {
       .from("invoice_imports")
       .insert({
         imported_by: user.id,
+        venue_id: venue.id,
         kind: "received",
         file_count: parsed.data.invoices.length,
         invoice_count_created: results.created,

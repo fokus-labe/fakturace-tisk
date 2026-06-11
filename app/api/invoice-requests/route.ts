@@ -5,10 +5,22 @@ import {
   isApiKeyHeader,
 } from "@/lib/auth/api-key";
 import { invoiceRequestSchema } from "@/lib/validations/invoice";
+import {
+  getActiveVenue,
+  getVenueIdBySlug,
+  DEFAULT_VENUE_SLUG,
+} from "@/lib/venues/get-user-venues";
 
 export const runtime = "nodejs";
 
-async function authenticate(req: NextRequest) {
+type AuthOk = {
+  ok: true;
+  mode: "user" | "api_key";
+  service: ReturnType<typeof createServiceClient>;
+  userId: string | null;
+};
+
+async function authenticate(req: NextRequest): Promise<AuthOk | { ok: false }> {
   const apiKey = isApiKeyHeader(req.headers.get("authorization"));
   if (apiKey) {
     const service = createServiceClient();
@@ -24,9 +36,25 @@ async function authenticate(req: NextRequest) {
   return {
     ok: true as const,
     mode: "user" as const,
-    service: supabase,
+    service: supabase as unknown as ReturnType<typeof createServiceClient>,
     userId: user.id,
   };
+}
+
+/**
+ * Resolve venue_id pro daný auth kontext.
+ * - user: aktivní venue (default fokus-tisk) přes RLS klienta
+ * - api_key (eshop): default fokus-tisk přes service klienta
+ */
+async function resolveVenueId(
+  auth: AuthOk,
+  slug?: string,
+): Promise<string | null> {
+  if (auth.mode === "user") {
+    const venue = await getActiveVenue(slug);
+    return venue?.id ?? null;
+  }
+  return getVenueIdBySlug(auth.service, slug ?? DEFAULT_VENUE_SLUG);
 }
 
 export async function GET(req: NextRequest) {
@@ -39,9 +67,17 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get("q");
   const limit = Math.min(Number(searchParams.get("limit") ?? 50), 200);
 
+  const venueId = await resolveVenueId(
+    auth,
+    searchParams.get("venue") ?? undefined,
+  );
+  if (!venueId)
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
+
   let query = auth.service
     .from("invoice_requests")
     .select("*, client:clients(*), items:invoice_items(*)")
+    .eq("venue_id", venueId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -77,6 +113,13 @@ export async function POST(req: NextRequest) {
   const input = parsed.data;
   const db = auth.service;
 
+  const venueId = await resolveVenueId(
+    auth,
+    (body as { venue_slug?: string } | null)?.venue_slug,
+  );
+  if (!venueId)
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
+
   let clientId = input.client_id ?? null;
   if (!clientId && input.new_client) {
     const { data: created, error: clientErr } = await db
@@ -84,6 +127,7 @@ export async function POST(req: NextRequest) {
       .insert({
         ...input.new_client,
         email: input.new_client.email || null,
+        venue_id: venueId,
         created_by: auth.userId,
       })
       .select("id")
@@ -114,6 +158,7 @@ export async function POST(req: NextRequest) {
     .from("invoice_requests")
     .insert({
       client_id: clientId,
+      venue_id: venueId,
       status: "draft",
       issued_at: input.issued_at ?? new Date().toISOString().slice(0, 10),
       due_date: input.due_date ?? null,

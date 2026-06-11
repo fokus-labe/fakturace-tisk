@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { ISSUED_PAYMENT_METHODS } from "@/lib/validations/invoice";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
 
 export const runtime = "nodejs";
 
@@ -75,6 +76,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const venue = await getActiveVenue(
+    (body as { venue_slug?: string } | null)?.venue_slug,
+  );
+  if (!venue) {
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
+  }
+
   const results = {
     created: 0,
     failed: 0,
@@ -112,6 +120,7 @@ export async function POST(req: NextRequest) {
               address_street: inv.client.address_street || null,
               address_city: inv.client.address_city || null,
               address_zip: inv.client.address_zip || null,
+              venue_id: venue.id,
               created_by: user.id,
             })
             .select("id")
@@ -138,6 +147,7 @@ export async function POST(req: NextRequest) {
               address_street: inv.client.address_street || null,
               address_city: inv.client.address_city || null,
               address_zip: inv.client.address_zip || null,
+              venue_id: venue.id,
               created_by: user.id,
             })
             .select("id")
@@ -153,6 +163,7 @@ export async function POST(req: NextRequest) {
         .from("invoice_requests")
         .insert({
           client_id: clientId,
+          venue_id: venue.id,
           status: "archived",
           issued_at: inv.issued_at,
           invoice_issued_at: inv.issued_at,
@@ -214,6 +225,7 @@ export async function POST(req: NextRequest) {
       .from("invoice_imports")
       .insert({
         imported_by: user.id,
+        venue_id: venue.id,
         file_count: parsed.data.invoices.length,
         invoice_count_created: results.created,
         invoice_count_failed: results.failed,

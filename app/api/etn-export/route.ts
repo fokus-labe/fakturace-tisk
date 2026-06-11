@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { generateEtnXlsx } from "@/lib/etn/generate-xlsx";
 import { fetchEtnPeriodData } from "@/lib/etn/fetch-period-data";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,10 @@ export async function POST(req: NextRequest) {
     );
 
   const { periodStart, periodEnd } = parsed.data;
+
+  const venue = await getActiveVenue(body?.venue);
+  if (!venue)
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
 
   let data;
   try {
@@ -87,6 +92,7 @@ export async function POST(req: NextRequest) {
   await supabase.from("etn_exports").insert({
     period_start: periodStart,
     period_end: periodEnd,
+    venue_id: venue.id,
     exported_by: user.id,
     invoice_count_received: data.receivedInvoices.length,
     invoice_count_issued: data.issuedInvoices.length,

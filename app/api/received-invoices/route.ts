@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { receivedInvoiceSchema } from "@/lib/validations/received-invoice";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
 
 export const runtime = "nodejs";
 
@@ -19,9 +20,14 @@ export async function GET(req: NextRequest) {
   const to = searchParams.get("to");
   const limit = Math.min(Number(searchParams.get("limit") ?? 100), 500);
 
+  const venue = await getActiveVenue(searchParams.get("venue") ?? undefined);
+  if (!venue)
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
+
   let query = supabase
     .from("received_invoices")
     .select("*, supplier:suppliers(*)")
+    .eq("venue_id", venue.id)
     .order("issued_at", { ascending: false })
     .limit(limit);
 
@@ -54,6 +60,10 @@ export async function POST(req: NextRequest) {
 
   const input = parsed.data;
 
+  const venue = await getActiveVenue(body?.venue_slug);
+  if (!venue)
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
+
   // Pokud status=paid a chybí paid_at, doplň dnešní datum
   let paid_at = input.paid_at ?? null;
   if (input.status === "paid" && !paid_at) {
@@ -64,6 +74,7 @@ export async function POST(req: NextRequest) {
     .from("received_invoices")
     .insert({
       supplier_id: input.supplier_id,
+      venue_id: venue.id,
       supplier_invoice_number: input.supplier_invoice_number ?? null,
       issued_at: input.issued_at,
       due_date: input.due_date ?? null,
