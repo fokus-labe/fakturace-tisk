@@ -39,6 +39,11 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
         label: "Přijaté faktury",
         icon: FileInput,
       },
+      {
+        href: "/received-invoices/import",
+        label: "Import přijatých",
+        icon: Upload,
+      },
       { href: "/suppliers", label: "Dodavatelé", icon: Building2 },
     ],
   },

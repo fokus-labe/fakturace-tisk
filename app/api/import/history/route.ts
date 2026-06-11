@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
+  const kind = searchParams.get("kind"); // "issued" | "received" | null (vše)
 
   if (id) {
     const { data, error } = await supabase
@@ -30,11 +31,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ import: { ...data, user_email: email } });
   }
 
-  const { data, error } = await supabase
+  let listQuery = supabase
     .from("invoice_imports")
     .select("*")
     .order("imported_at", { ascending: false })
     .limit(50);
+  if (kind === "issued" || kind === "received") {
+    listQuery = listQuery.eq("kind", kind);
+  }
+  const { data, error } = await listQuery;
 
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });

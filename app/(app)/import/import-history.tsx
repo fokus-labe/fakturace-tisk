@@ -17,6 +17,7 @@ export interface ImportRecord {
   imported_at: string;
   imported_by: string | null;
   user_email: string | null;
+  kind?: "issued" | "received" | null;
   file_count: number;
   invoice_count_created: number;
   invoice_count_failed: number;
@@ -30,6 +31,25 @@ export interface ImportRecord {
 
 interface Props {
   refreshKey: number;
+  /** Filtr typu importu. Pokud není uveden, zobrazí se vše. */
+  kind?: "issued" | "received";
+  /** Popisek entity vytvořené při importu (Klienti / Dodavatelé). */
+  entityLabel?: string;
+}
+
+function KindBadge({ kind }: { kind?: "issued" | "received" | null }) {
+  if (kind === "received") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+        Přijaté
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+      Vydané
+    </span>
+  );
 }
 
 const USD_TO_CZK = 24;
@@ -66,7 +86,11 @@ function ImportStatusBadge({
   );
 }
 
-export function ImportHistory({ refreshKey }: Props) {
+export function ImportHistory({
+  refreshKey,
+  kind,
+  entityLabel = "Klienti",
+}: Props) {
   const [history, setHistory] = useState<ImportRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<ImportRecord | null>(null);
@@ -74,7 +98,10 @@ export function ImportHistory({ refreshKey }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/import/history");
+      const url = kind
+        ? `/api/import/history?kind=${kind}`
+        : "/api/import/history";
+      const res = await fetch(url);
       if (!res.ok) {
         setHistory([]);
         return;
@@ -84,7 +111,7 @@ export function ImportHistory({ refreshKey }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [kind]);
 
   useEffect(() => {
     void load();
@@ -120,10 +147,13 @@ export function ImportHistory({ refreshKey }: Props) {
                       {imp.user_email ?? "—"}
                     </p>
                   </div>
-                  <ImportStatusBadge
-                    created={imp.invoice_count_created}
-                    failed={imp.invoice_count_failed}
-                  />
+                  <div className="flex flex-col items-end gap-1">
+                    <ImportStatusBadge
+                      created={imp.invoice_count_created}
+                      failed={imp.invoice_count_failed}
+                    />
+                    <KindBadge kind={imp.kind} />
+                  </div>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <div>
@@ -133,7 +163,7 @@ export function ImportHistory({ refreshKey }: Props) {
                     </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Klienti:</span>{" "}
+                    <span className="text-muted-foreground">{entityLabel}:</span>{" "}
                     <span className="font-mono tabular-nums">
                       +{imp.client_count_created}
                     </span>
@@ -169,9 +199,10 @@ export function ImportHistory({ refreshKey }: Props) {
               <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 text-left">Datum</th>
+                  <th className="px-4 py-3 text-left">Typ</th>
                   <th className="px-4 py-3 text-left">Uživatel</th>
                   <th className="px-4 py-3 text-right">Faktury</th>
-                  <th className="px-4 py-3 text-right">Klienti</th>
+                  <th className="px-4 py-3 text-right">{entityLabel}</th>
                   <th className="px-4 py-3 text-right">Náklad</th>
                   <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-right"></th>
@@ -182,6 +213,9 @@ export function ImportHistory({ refreshKey }: Props) {
                   <tr key={imp.id} className="border-t hover:bg-muted/30">
                     <td className="px-4 py-3 tabular-nums">
                       {fmtDateTime(imp.imported_at)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <KindBadge kind={imp.kind} />
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                       {imp.user_email ?? "—"}
@@ -239,7 +273,7 @@ export function ImportHistory({ refreshKey }: Props) {
                     value={`${detail.invoice_count_created} / ${detail.file_count}`}
                   />
                   <Row
-                    label="Klienti"
+                    label={entityLabel}
                     value={`+${detail.client_count_created}`}
                   />
                   {detail.total_tokens_input != null ? (

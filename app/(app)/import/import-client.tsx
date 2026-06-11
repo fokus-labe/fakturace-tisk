@@ -608,7 +608,7 @@ export function ImportClient() {
 
       <Separator className="my-4" />
 
-      <ImportHistory refreshKey={historyKey} />
+      <ImportHistory refreshKey={historyKey} kind="issued" entityLabel="Klienti" />
 
       {/* Edit dialog */}
       <Dialog
