@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
 
 export const runtime = "nodejs";
 
@@ -16,11 +17,18 @@ export async function GET(req: NextRequest) {
   const id = searchParams.get("id");
   const kind = searchParams.get("kind"); // "issued" | "received" | null (vše)
 
+  // Historie se filtruje per aktivní venue (RLS by adminovi ukázala všechny).
+  const venue = await getActiveVenue(searchParams.get("venue") ?? undefined);
+  if (!venue) {
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
+  }
+
   if (id) {
     const { data, error } = await supabase
       .from("invoice_imports")
       .select("*")
       .eq("id", id)
+      .eq("venue_id", venue.id)
       .maybeSingle();
     if (error)
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -34,6 +42,7 @@ export async function GET(req: NextRequest) {
   let listQuery = supabase
     .from("invoice_imports")
     .select("*")
+    .eq("venue_id", venue.id)
     .order("imported_at", { ascending: false })
     .limit(50);
   if (kind === "issued" || kind === "received") {
