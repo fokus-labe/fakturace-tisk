@@ -1,17 +1,23 @@
-import { Logo } from "@/components/logo";
+import Image from "next/image";
 import { CropMarks } from "@/components/ui/crop-marks";
 import { LoginForm } from "./login-form";
 
-export const metadata = { title: "Přihlášení · Fokus tisk" };
+export const metadata = { title: "Přihlášení · Dobrý Fokus" };
 
 export default function LoginPage() {
   return (
     <div className="flex flex-1 items-center justify-center bg-muted/30 px-4 py-12">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <Logo width={140} height={100} priority />
+          <Image
+            src="/dobry-fokus-logo.png"
+            alt="Dobrý Fokus"
+            width={140}
+            height={140}
+            priority
+          />
           <p className="mt-4 text-xs uppercase tracking-widest text-muted-foreground">
-            Fakturace
+            Fakturační systém
           </p>
         </div>
 

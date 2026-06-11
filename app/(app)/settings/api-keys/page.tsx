@@ -10,13 +10,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isAdmin } from "@/lib/venues/is-admin";
 import { formatDate } from "@/lib/utils/format";
 import { ApiKeysClient } from "./api-keys-client";
 
 export const metadata = { title: "API klíče · Fokus tisk" };
 
 export default async function ApiKeysPage() {
+  if (!(await isAdmin())) redirect("/settings");
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("api_keys")

@@ -102,7 +102,7 @@ export default async function SettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Nastavení</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Správa účtu, uživatelů a systému.
+          {admin ? "Správa účtu, uživatelů a systému." : "Správa účtu."}
         </p>
       </div>
 
@@ -130,7 +130,8 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Uživatelé systému */}
+      {/* Uživatelé systému — jen admin */}
+      {admin ? (
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -233,6 +234,7 @@ export default async function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
       {/* Přístup k provozovnám (jen admin) */}
       {admin ? (
@@ -280,24 +282,26 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* API klíče */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">API klíče</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm">
-          <p className="text-muted-foreground mb-3">
-            Klíče pro budoucí napojení e-shopů na endpoint{" "}
-            <code>POST /api/invoice-requests</code>.
-          </p>
-          <Link
-            href="/settings/api-keys"
-            className="text-sm font-medium underline"
-          >
-            Spravovat API klíče →
-          </Link>
-        </CardContent>
-      </Card>
+      {/* API klíče — jen admin */}
+      {admin ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">API klíče</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm">
+            <p className="text-muted-foreground mb-3">
+              Klíče pro budoucí napojení e-shopů na endpoint{" "}
+              <code>POST /api/invoice-requests</code>.
+            </p>
+            <Link
+              href="/settings/api-keys"
+              className="text-sm font-medium underline"
+            >
+              Spravovat API klíče →
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
