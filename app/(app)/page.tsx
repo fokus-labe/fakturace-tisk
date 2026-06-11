@@ -12,6 +12,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
+import { VenueBreadcrumb } from "@/components/venue/venue-breadcrumb";
 import { calculateInvoiceTotals } from "@/lib/utils/vat";
 import { formatCZK, formatDate } from "@/lib/utils/format";
 import { InvoiceStatusBadge } from "@/components/invoice/invoice-status-badge";
@@ -46,21 +48,29 @@ const RECEIVED_PILLS: {
 
 export default async function Dashboard() {
   const supabase = await createClient();
+  const venue = await getActiveVenue();
+  const venueId = venue?.id;
+
+  let issuedQuery = supabase
+    .from("invoice_requests")
+    .select(
+      "*, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)",
+    )
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (venueId) issuedQuery = issuedQuery.eq("venue_id", venueId);
+
+  let receivedQuery = supabase
+    .from("received_invoices")
+    .select("*, supplier:suppliers(name)")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (venueId) receivedQuery = receivedQuery.eq("venue_id", venueId);
 
   const [{ data: issued }, { data: received }, stats] = await Promise.all([
-    supabase
-      .from("invoice_requests")
-      .select(
-        "*, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)",
-      )
-      .order("created_at", { ascending: false })
-      .limit(200),
-    supabase
-      .from("received_invoices")
-      .select("*, supplier:suppliers(name)")
-      .order("created_at", { ascending: false })
-      .limit(200),
-    getDashboardStats(supabase),
+    issuedQuery,
+    receivedQuery,
+    getDashboardStats(supabase, venueId),
   ]);
 
   const issuedList = issued ?? [];
@@ -100,9 +110,12 @@ export default async function Dashboard() {
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Přehled</h1>
+          <VenueBreadcrumb />
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Přehled{venue ? ` — ${venue.name}` : ""}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Fakturace pro provozovnu Fokus tisk.
+            Fakturace pro provozovnu {venue?.name ?? "Fokus tisk"}.
           </p>
         </div>
         <Link

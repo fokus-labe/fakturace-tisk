@@ -55,6 +55,7 @@ const round2 = (x: number) => Math.round(x * 100) / 100;
 
 export async function getDashboardStats(
   supabase: SupabaseClient,
+  venueId?: string,
 ): Promise<DashboardStats> {
   const now = new Date();
   const thisMonthStart = startOfMonthISO(now);
@@ -70,34 +71,47 @@ export async function getDashboardStats(
   const yearStart = `${now.getFullYear()}-01-01`;
   const yearEnd = `${now.getFullYear()}-12-31`;
 
+  let receivedQuery = supabase
+    .from("received_invoices")
+    .select(
+      "id, issued_at, amount_total, amount_no_vat, status, supplier:suppliers(id, name)",
+    )
+    .gte("issued_at", cashflowStart)
+    .neq("status", "cancelled");
+  if (venueId) receivedQuery = receivedQuery.eq("venue_id", venueId);
+
+  let issuedQuery = supabase
+    .from("invoice_requests")
+    .select(
+      "id, issued_at, invoice_issued_at, status, client:clients(id, name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)",
+    )
+    .gte("issued_at", cashflowStart)
+    .not("status", "in", '("cancelled","draft")');
+  if (venueId) issuedQuery = issuedQuery.eq("venue_id", venueId);
+
+  let pendingReceivedQuery = supabase
+    .from("received_invoices")
+    .select("id, amount_total, status")
+    .eq("status", "entered");
+  if (venueId) pendingReceivedQuery = pendingReceivedQuery.eq("venue_id", venueId);
+
+  let pendingAtAccountantQuery = supabase
+    .from("invoice_requests")
+    .select("id, status")
+    .eq("status", "sent_to_accountant");
+  if (venueId)
+    pendingAtAccountantQuery = pendingAtAccountantQuery.eq("venue_id", venueId);
+
   const [
     { data: received },
     { data: issued },
     { data: pendingReceived },
     { data: pendingAtAccountant },
   ] = await Promise.all([
-    supabase
-      .from("received_invoices")
-      .select(
-        "id, issued_at, amount_total, amount_no_vat, status, supplier:suppliers(id, name)",
-      )
-      .gte("issued_at", cashflowStart)
-      .neq("status", "cancelled"),
-    supabase
-      .from("invoice_requests")
-      .select(
-        "id, issued_at, invoice_issued_at, status, client:clients(id, name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)",
-      )
-      .gte("issued_at", cashflowStart)
-      .not("status", "in", '("cancelled","draft")'),
-    supabase
-      .from("received_invoices")
-      .select("id, amount_total, status")
-      .eq("status", "entered"),
-    supabase
-      .from("invoice_requests")
-      .select("id, status")
-      .eq("status", "sent_to_accountant"),
+    receivedQuery,
+    issuedQuery,
+    pendingReceivedQuery,
+    pendingAtAccountantQuery,
   ]);
 
   const receivedRows = (received ?? []) as unknown as Array<{

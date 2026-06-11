@@ -1,6 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { renderInvoicePdf } from "@/lib/pdf/generate-invoice-pdf";
+import {
+  fokusTiskIssuer,
+  venueToIssuer,
+  type IssuerData,
+} from "@/lib/venues/venue-issuer";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -53,10 +58,23 @@ export async function GET(
       vat_rate: Number(it.vat_rate),
     }),
   );
+
+  // Vystavovatel z provozovny faktury (per-venue)
+  let issuer: IssuerData = fokusTiskIssuer();
+  if (data.venue_id) {
+    const { data: venue } = await supabase
+      .from("venues")
+      .select("*")
+      .eq("id", data.venue_id)
+      .single();
+    if (venue) issuer = venueToIssuer(venue);
+  }
+
   const pdfBuffer = await renderInvoicePdf({
     invoice: data,
     client: data.client,
     items,
+    issuer,
   });
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {

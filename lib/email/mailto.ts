@@ -1,6 +1,7 @@
 import { formatCZK, formatDate } from "@/lib/utils/format";
 
 interface MailtoInput {
+  venueName?: string;
   client: {
     name: string;
     ico?: string | null;
@@ -19,11 +20,12 @@ export function buildAccountantMailto(input: MailtoInput): {
   subject: string;
   body: string;
 } {
-  const subject = `[Fokus tisk] Žádost o vystavení faktury – ${input.client.name} – ${formatCZK(input.totals.withVat)}`;
+  const venueName = input.venueName ?? "Fokus tisk";
+  const subject = `[${venueName}] Žádost o vystavení faktury – ${input.client.name} – ${formatCZK(input.totals.withVat)}`;
 
   const body = `Ahoj Petře,
 
-posílám podklad k vystavení faktury z Fokus tisku:
+posílám podklad k vystavení faktury z provozovny ${venueName}:
 
 - Odběratel: ${input.client.name}${input.client.ico ? ` (IČO ${input.client.ico})` : ""}
 - Celkem bez DPH: ${formatCZK(input.totals.noVat)}
@@ -36,7 +38,7 @@ Detailní podklad mám v PDF, přiložím ho k tomuto e-mailu.
 
 Děkuji,
 Jakub Kolstrunk
-Fokus tisk`;
+${venueName}`;
 
   const params = new URLSearchParams({
     subject,

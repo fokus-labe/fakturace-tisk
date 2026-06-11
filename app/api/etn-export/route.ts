@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   let data;
   try {
-    data = await fetchEtnPeriodData(supabase, periodStart, periodEnd);
+    data = await fetchEtnPeriodData(supabase, periodStart, periodEnd, venue.id);
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Načtení dat selhalo" },
@@ -51,9 +51,10 @@ export async function POST(req: NextRequest) {
     periodEnd: new Date(periodEnd),
     receivedInvoices: data.receivedInvoices,
     issuedInvoices: data.issuedInvoices,
+    venueName: venue.name,
   });
 
-  const filename = `ETN_Fokus_tisk_${periodStart}_${periodEnd}.xlsx`;
+  const filename = `ETN_${venue.slug}_${periodStart}_${periodEnd}.xlsx`;
   const storagePath = `${Date.now()}_${filename}`;
 
   const { error: uploadError } = await supabase.storage

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchEtnPeriodData } from "@/lib/etn/fetch-period-data";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
 
 export const runtime = "nodejs";
 
@@ -24,8 +25,17 @@ export async function GET(req: NextRequest) {
       { status: 400 },
     );
 
+  const venue = await getActiveVenue(searchParams.get("venue") ?? undefined);
+  if (!venue)
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
+
   try {
-    const data = await fetchEtnPeriodData(supabase, periodStart, periodEnd);
+    const data = await fetchEtnPeriodData(
+      supabase,
+      periodStart,
+      periodEnd,
+      venue.id,
+    );
     return NextResponse.json({
       periodStart,
       periodEnd,

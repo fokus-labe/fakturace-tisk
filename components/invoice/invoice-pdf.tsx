@@ -7,7 +7,7 @@ import {
   StyleSheet,
   Font,
 } from "@react-pdf/renderer";
-import { ISSUER } from "@/config/issuer";
+import { fokusTiskIssuer, type IssuerData } from "@/lib/venues/venue-issuer";
 import type {
   Client,
   InvoiceItem,
@@ -165,6 +165,7 @@ interface InvoicePdfProps {
   invoice: InvoiceRequest;
   client: Client;
   items: InvoiceItem[];
+  issuer?: IssuerData;
 }
 
 const fmtCZK = (n: number) =>
@@ -180,7 +181,12 @@ const fmtDate = (d: string | null | undefined) => {
   return `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}`;
 };
 
-export function InvoicePdf({ invoice, client, items }: InvoicePdfProps) {
+export function InvoicePdf({
+  invoice,
+  client,
+  items,
+  issuer = fokusTiskIssuer(),
+}: InvoicePdfProps) {
   const totals = calculateInvoiceTotals(items);
 
   return (
@@ -196,19 +202,29 @@ export function InvoicePdf({ invoice, client, items }: InvoicePdfProps) {
         <View style={styles.twoCol}>
           <View style={styles.col}>
             <Text style={styles.blockLabel}>Vystavovatel</Text>
-            <Text style={styles.partyName}>{ISSUER.name}</Text>
-            <Text style={styles.partyLine}>{ISSUER.division.name}</Text>
-            <Text style={styles.partyLine}>{ISSUER.address.street}</Text>
-            <Text style={styles.partyLine}>
-              {ISSUER.address.zip} {ISSUER.address.city}
-            </Text>
-            <Text style={styles.partyLine}>{ISSUER.address.country}</Text>
-            <Text style={styles.partyLine}>IČO: {ISSUER.ico}</Text>
-            {ISSUER.dic ? (
-              <Text style={styles.partyLine}>DIČ: {ISSUER.dic}</Text>
+            <Text style={styles.partyName}>{issuer.legal_name}</Text>
+            <Text style={styles.partyLine}>{issuer.brand_name}</Text>
+            {issuer.address_street ? (
+              <Text style={styles.partyLine}>{issuer.address_street}</Text>
             ) : null}
-            <Text style={styles.partyLine}>{ISSUER.contact.email}</Text>
-            <Text style={styles.partyLine}>{ISSUER.contact.phone}</Text>
+            {issuer.address_zip || issuer.address_city ? (
+              <Text style={styles.partyLine}>
+                {issuer.address_zip ?? ""} {issuer.address_city ?? ""}
+              </Text>
+            ) : null}
+            {issuer.address_country ? (
+              <Text style={styles.partyLine}>{issuer.address_country}</Text>
+            ) : null}
+            <Text style={styles.partyLine}>IČO: {issuer.ico}</Text>
+            {issuer.dic ? (
+              <Text style={styles.partyLine}>DIČ: {issuer.dic}</Text>
+            ) : null}
+            {issuer.email ? (
+              <Text style={styles.partyLine}>{issuer.email}</Text>
+            ) : null}
+            {issuer.phone ? (
+              <Text style={styles.partyLine}>{issuer.phone}</Text>
+            ) : null}
           </View>
 
           <View style={styles.col}>
@@ -316,8 +332,8 @@ export function InvoicePdf({ invoice, client, items }: InvoicePdfProps) {
         ) : null}
 
         <Text style={styles.footer} fixed>
-          {ISSUER.name} · {ISSUER.division.name} · IČO {ISSUER.ico} ·{" "}
-          {ISSUER.contact.email}
+          {issuer.legal_name} · {issuer.brand_name} · IČO {issuer.ico}
+          {issuer.email ? ` · ${issuer.email}` : ""}
         </Text>
       </Page>
     </Document>

@@ -38,25 +38,30 @@ export async function fetchEtnPeriodData(
   supabase: SupabaseClient,
   periodStart: string,
   periodEnd: string,
+  venueId?: string,
 ): Promise<EtnPeriodData> {
   // === Přijaté faktury v období (kromě cancelled) ===
-  const { data: receivedRows, error: errReceived } = await supabase
+  let receivedQuery = supabase
     .from("received_invoices")
     .select("*, supplier:suppliers(name)")
     .gte("issued_at", periodStart)
     .lte("issued_at", periodEnd)
     .neq("status", "cancelled")
     .order("issued_at", { ascending: true });
+  if (venueId) receivedQuery = receivedQuery.eq("venue_id", venueId);
+  const { data: receivedRows, error: errReceived } = await receivedQuery;
   if (errReceived) throw new Error(errReceived.message);
 
   // === Vydané faktury — bereme všechny krom draft/cancelled za období ===
   // Efektivní datum = invoice_issued_at || issued_at.
   // Pro správné filtrování načteme širší okno a vyfiltrujeme v JS.
-  const { data: issuedRows, error: errIssued } = await supabase
+  let issuedQuery = supabase
     .from("invoice_requests")
     .select("*, client:clients(name), items:invoice_items(*)")
     .not("status", "in", '("cancelled")')
     .order("issued_at", { ascending: true });
+  if (venueId) issuedQuery = issuedQuery.eq("venue_id", venueId);
+  const { data: issuedRows, error: errIssued } = await issuedQuery;
   if (errIssued) throw new Error(errIssued.message);
 
   const allIssued = issuedRows ?? [];

@@ -1,3 +1,6 @@
+// Vystavovatel se od Sezení P3 bere primárně z tabulky `venues` (per provozovna).
+// Tento config slouží jen jako FALLBACK pro PDF/ETN, když venue nemá vlastní
+// údaje (sdílené sídlo Fokus Labe) nebo se nepodaří načíst. Viz lib/venues/venue-issuer.ts.
 export const ISSUER = {
   name: "Fokus Labe, z. ú.",
   ico: "44226586",

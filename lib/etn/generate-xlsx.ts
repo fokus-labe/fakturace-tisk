@@ -26,6 +26,8 @@ export interface EtnReportInput {
   periodEnd: Date;
   receivedInvoices: EtnReceivedInvoice[];
   issuedInvoices: EtnIssuedInvoice[];
+  /** Název provozovny do hlavičky F1:H1. Default "Fokus tisk". */
+  venueName?: string;
 }
 
 // Labels pro lidskou čitelnost sloupce D u nákladů.
@@ -125,7 +127,7 @@ export async function generateEtnXlsx(
 
   sheet.mergeCells("F1:H1");
   const provozovna = sheet.getCell("F1");
-  provozovna.value = "Fokus tisk";
+  provozovna.value = input.venueName ?? "Fokus tisk";
   provozovna.font = FONT_TITLE;
   provozovna.alignment = { horizontal: "center", vertical: "middle" };
 

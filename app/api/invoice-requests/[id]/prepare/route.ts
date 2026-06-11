@@ -3,6 +3,11 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { renderInvoicePdf } from "@/lib/pdf/generate-invoice-pdf";
 import { buildAccountantMailto } from "@/lib/email/mailto";
 import { calculateInvoiceTotals } from "@/lib/utils/vat";
+import {
+  fokusTiskIssuer,
+  venueToIssuer,
+  type IssuerData,
+} from "@/lib/venues/venue-issuer";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -30,6 +35,17 @@ export async function POST(
       { status: 404 },
     );
 
+  // Vystavovatel z provozovny faktury (per-venue)
+  let issuer: IssuerData = fokusTiskIssuer();
+  if (data.venue_id) {
+    const { data: venue } = await supabase
+      .from("venues")
+      .select("*")
+      .eq("id", data.venue_id)
+      .single();
+    if (venue) issuer = venueToIssuer(venue);
+  }
+
   const client = data.client;
   const items = (data.items ?? []).map(
     (it: { quantity: number | string; unit_price_no_vat: number | string; vat_rate: number | string } & Record<string, unknown>) => ({
@@ -45,6 +61,7 @@ export async function POST(
     invoice: data,
     client,
     items,
+    issuer,
   });
 
   const service = createServiceClient();
@@ -61,6 +78,7 @@ export async function POST(
   const pdfUrl = `invoice-pdfs/${storagePath}`;
 
   const mailto = buildAccountantMailto({
+    venueName: issuer.brand_name,
     client: { name: client.name, ico: client.ico },
     totals,
     dueDate: data.due_date ?? data.issued_at,

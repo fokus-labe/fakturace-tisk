@@ -1,10 +1,17 @@
 import { Upload } from "lucide-react";
 import { EtnExportClient } from "./etn-export-client";
 import { VenueBreadcrumb } from "@/components/venue/venue-breadcrumb";
+import { getActiveVenue, getUserVenues } from "@/lib/venues/get-user-venues";
 
 export const metadata = { title: "ETN Export · Fokus tisk" };
 
-export default function EtnExportPage() {
+export default async function EtnExportPage() {
+  const [venue, venues] = await Promise.all([
+    getActiveVenue(),
+    getUserVenues(),
+  ]);
+  const multiVenue = venues.length > 1;
+
   return (
     <div className="space-y-6">
       <div>
@@ -21,6 +28,18 @@ export default function EtnExportPage() {
           </div>
         </div>
       </div>
+
+      {venue ? (
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+          📊 Generuješ ETN report pro provozovnu:{" "}
+          <strong>{venue.name}</strong>
+          {multiVenue ? (
+            <span className="mt-1 block text-blue-700/80 dark:text-blue-300/80">
+              Pro jinou provozovnu ji přepni v selectoru v sidebaru.
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <EtnExportClient />
     </div>
