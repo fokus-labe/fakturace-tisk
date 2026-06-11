@@ -12,6 +12,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
+import { VenueBreadcrumb } from "@/components/venue/venue-breadcrumb";
 import { formatCZK, formatDate, formatDateInput } from "@/lib/utils/format";
 import { ReceivedInvoiceStatusBadge } from "@/components/received-invoice/received-invoice-status-badge";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -120,10 +122,12 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
     sp.sort_dir === "desc" ? "desc" : sp.sort_dir === "asc" ? "asc" : DEFAULT_SORT_DIR;
 
   const supabase = await createClient();
+  const venue = await getActiveVenue();
   let query = supabase
     .from("received_invoices")
     .select("*, supplier:suppliers(id, name)")
     .limit(300);
+  if (venue) query = query.eq("venue_id", venue.id);
   if (status) query = query.eq("status", status);
   if (category) query = query.eq("category", category);
   if (from) query = query.gte("issued_at", from);
@@ -174,6 +178,7 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
+          <VenueBreadcrumb />
           <h1 className="text-2xl font-semibold tracking-tight">
             Přijaté faktury
           </h1>

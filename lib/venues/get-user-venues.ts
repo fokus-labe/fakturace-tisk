@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveVenueCookie } from "./cookie";
 
 export type VenueRole = "manager" | "viewer" | "admin";
 
@@ -81,12 +82,15 @@ export async function getActiveVenue(
     if (fromParam) return fromParam;
   }
 
-  // 2. TODO (Sezení P2): persist přes cookie
+  // 2. Cookie persist (poslední vybraná venue), pokud k ní user stále má přístup
+  const cookieSlug = await getActiveVenueCookie();
+  if (cookieSlug) {
+    const fromCookie = venues.find((v) => v.slug === cookieSlug);
+    if (fromCookie) return fromCookie;
+  }
 
-  // 3. Default — fokus-tisk, jinak první dostupná
-  return (
-    venues.find((v) => v.slug === DEFAULT_VENUE_SLUG) ?? venues[0]
-  );
+  // 3. Default — fokus-tisk, jinak první dostupná (getUserVenues řadí fokus-tisk první)
+  return venues.find((v) => v.slug === DEFAULT_VENUE_SLUG) ?? venues[0];
 }
 
 /**

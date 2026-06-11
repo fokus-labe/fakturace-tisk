@@ -12,6 +12,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
+import { VenueBreadcrumb } from "@/components/venue/venue-breadcrumb";
 import { calculateInvoiceTotals } from "@/lib/utils/vat";
 import { formatCZK, formatDate } from "@/lib/utils/format";
 import { InvoiceStatusBadge } from "@/components/invoice/invoice-status-badge";
@@ -99,11 +101,13 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
     sp.sort_dir === "desc" ? "desc" : sp.sort_dir === "asc" ? "asc" : DEFAULT_SORT_DIR;
 
   const supabase = await createClient();
+  const venue = await getActiveVenue();
   let query = supabase
     .from("invoice_requests")
     .select("*, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)")
     .limit(200);
 
+  if (venue) query = query.eq("venue_id", venue.id);
   if (status) query = query.eq("status", status);
   else if (!showArchived) query = query.neq("status", "archived");
   if (from) query = query.gte("issued_at", from);
@@ -165,6 +169,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
+          <VenueBreadcrumb />
           <h1 className="text-2xl sm:text-2xl font-semibold tracking-tight">
             Vydané faktury
           </h1>

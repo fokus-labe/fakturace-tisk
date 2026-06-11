@@ -55,6 +55,13 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
   },
 ];
 
+// Sekce viditelná jen pro admin role (venue admin). Připojí se k navigaci
+// dynamicky podle isAdmin propu v SidebarNav.
+export const ADMIN_NAV_GROUP: NavGroup = {
+  label: "Správa",
+  items: [{ href: "/venues", label: "Provozovny", icon: Building2 }],
+};
+
 export function isNavActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(href + "/");

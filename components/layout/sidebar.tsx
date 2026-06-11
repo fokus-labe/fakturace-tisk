@@ -6,10 +6,15 @@ import { usePathname } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { cn } from "@/lib/utils";
 import {
+  ADMIN_NAV_GROUP,
   NAVIGATION_GROUPS,
   isNavActive,
   type NavItem,
 } from "./nav-config";
+import {
+  VenueSelector,
+  type VenueOption,
+} from "@/components/venue/venue-selector";
 
 function NavLink({
   item,
@@ -47,13 +52,17 @@ function NavLink({
 
 interface SidebarNavProps {
   onNavigate?: () => void;
+  isAdmin?: boolean;
 }
 
-export function SidebarNav({ onNavigate }: SidebarNavProps) {
+export function SidebarNav({ onNavigate, isAdmin }: SidebarNavProps) {
   const pathname = usePathname();
+  const groups = isAdmin
+    ? [...NAVIGATION_GROUPS, ADMIN_NAV_GROUP]
+    : NAVIGATION_GROUPS;
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-4">
-      {NAVIGATION_GROUPS.map((group, gi) => (
+      {groups.map((group, gi) => (
         <div key={gi} className={gi > 0 ? "mt-6" : ""}>
           {group.label ? (
             <p className="px-3 mb-2 text-xs uppercase tracking-widest text-muted-foreground font-medium">
@@ -90,12 +99,22 @@ export function SidebarBrand() {
   );
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  venues: VenueOption[];
+  activeSlug: string;
+  isAdmin: boolean;
+}
+
+export function Sidebar({ venues, activeSlug, isAdmin }: SidebarProps) {
   return (
     <aside className="hidden md:flex md:w-60 md:flex-col md:border-r md:bg-background">
       <SidebarBrand />
       <div className="mx-3 border-b" />
-      <SidebarNav />
+      <div className="px-3 py-3">
+        <VenueSelector venues={venues} activeSlug={activeSlug} />
+      </div>
+      <div className="mx-3 border-b" />
+      <SidebarNav isAdmin={isAdmin} />
     </aside>
   );
 }

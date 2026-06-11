@@ -18,10 +18,17 @@ import {
 } from "@/components/ui/sheet";
 import { Logo } from "@/components/logo";
 import { SidebarNav } from "@/components/layout/sidebar";
+import {
+  VenueSelector,
+  type VenueOption,
+} from "@/components/venue/venue-selector";
 import { createClient } from "@/lib/supabase/client";
 
 interface HeaderProps {
   email: string | null;
+  venues: VenueOption[];
+  activeSlug: string;
+  isAdmin: boolean;
 }
 
 function initialsFromEmail(email: string | null): string {
@@ -34,7 +41,7 @@ function initialsFromEmail(email: string | null): string {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-export function Header({ email }: HeaderProps) {
+export function Header({ email, venues, activeSlug, isAdmin }: HeaderProps) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const initials = initialsFromEmail(email);
@@ -71,7 +78,14 @@ export function Header({ email }: HeaderProps) {
                 </p>
               </div>
               <div className="mx-3 border-b" />
-              <SidebarNav onNavigate={() => setMobileOpen(false)} />
+              <div className="px-3 py-3">
+                <VenueSelector venues={venues} activeSlug={activeSlug} />
+              </div>
+              <div className="mx-3 border-b" />
+              <SidebarNav
+                onNavigate={() => setMobileOpen(false)}
+                isAdmin={isAdmin}
+              />
             </div>
           </SheetContent>
         </Sheet>

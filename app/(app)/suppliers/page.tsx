@@ -12,17 +12,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
+import { VenueBreadcrumb } from "@/components/venue/venue-breadcrumb";
 import { formatDate } from "@/lib/utils/format";
 import { RECEIVED_INVOICE_CATEGORY_LABELS } from "@/types/received-invoice";
 import type { ReceivedInvoiceCategory } from "@/types/received-invoice";
 
 export default async function SuppliersPage() {
   const supabase = await createClient();
-  const { data: suppliers } = await supabase
+  const venue = await getActiveVenue();
+  let suppliersQuery = supabase
     .from("suppliers")
     .select("id, name, ico, email, default_category, created_at")
     .order("name", { ascending: true })
     .limit(500);
+  if (venue) suppliersQuery = suppliersQuery.eq("venue_id", venue.id);
+  const { data: suppliers } = await suppliersQuery;
 
   const list = suppliers ?? [];
 
@@ -30,9 +35,10 @@ export default async function SuppliersPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
+          <VenueBreadcrumb />
           <h1 className="text-2xl font-semibold tracking-tight">Dodavatelé</h1>
           <p className="text-sm text-muted-foreground">
-            Evidence dodavatelů Fokus tisk.
+            Evidence dodavatelů.
           </p>
         </div>
         <Link

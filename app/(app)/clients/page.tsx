@@ -12,15 +12,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
+import { VenueBreadcrumb } from "@/components/venue/venue-breadcrumb";
 import { formatDate } from "@/lib/utils/format";
 
 export default async function ClientsPage() {
   const supabase = await createClient();
-  const { data: clients } = await supabase
+  const venue = await getActiveVenue();
+  let clientsQuery = supabase
     .from("clients")
     .select("id, name, ico, email, created_at")
     .order("name", { ascending: true })
     .limit(500);
+  if (venue) clientsQuery = clientsQuery.eq("venue_id", venue.id);
+  const { data: clients } = await clientsQuery;
 
   const list = clients ?? [];
 
@@ -28,9 +33,10 @@ export default async function ClientsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
+          <VenueBreadcrumb />
           <h1 className="text-2xl font-semibold tracking-tight">Klienti</h1>
           <p className="text-sm text-muted-foreground">
-            Evidence odběratelů Fokus tisk.
+            Evidence odběratelů.
           </p>
         </div>
         <Link

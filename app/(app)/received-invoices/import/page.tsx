@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
+import { VenueBreadcrumb } from "@/components/venue/venue-breadcrumb";
 import { ImportReceivedClient, type SupplierLite } from "./import-received-client";
 
 export const metadata = {
@@ -7,10 +9,13 @@ export const metadata = {
 
 export default async function ImportReceivedPage() {
   const supabase = await createClient();
-  const { data } = await supabase
+  const venue = await getActiveVenue();
+  let suppliersQuery = supabase
     .from("suppliers")
     .select("id, name, ico, default_payment_method, default_category")
     .order("name", { ascending: true });
+  if (venue) suppliersQuery = suppliersQuery.eq("venue_id", venue.id);
+  const { data } = await suppliersQuery;
 
   const suppliers: SupplierLite[] = (data ?? []).map((s) => ({
     id: s.id,
@@ -20,5 +25,10 @@ export default async function ImportReceivedPage() {
     default_category: s.default_category ?? null,
   }));
 
-  return <ImportReceivedClient suppliers={suppliers} />;
+  return (
+    <div className="space-y-2">
+      <VenueBreadcrumb />
+      <ImportReceivedClient suppliers={suppliers} />
+    </div>
+  );
 }

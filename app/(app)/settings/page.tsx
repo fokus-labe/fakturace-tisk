@@ -10,7 +10,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ChangePasswordDialog } from "@/components/settings/change-password-dialog";
+import {
+  UserVenuesManager,
+  type ManagerAssignment,
+} from "@/components/settings/user-venues-manager";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { isAdmin } from "@/lib/venues/is-admin";
 import { ISSUER } from "@/config/issuer";
 
 interface UserRow {
@@ -76,6 +81,22 @@ export default async function SettingsPage() {
     ? `https://supabase.com/dashboard/project/${projectRef}/auth/users`
     : "https://supabase.com/dashboard";
 
+  // Admin sekce: přiřazení uživatelů k provozovnám
+  const admin = await isAdmin();
+  let venues: { id: string; name: string }[] = [];
+  let assignments: ManagerAssignment[] = [];
+  if (admin) {
+    const { data: venueRows } = await supabase
+      .from("venues")
+      .select("id, name")
+      .order("name", { ascending: true });
+    venues = venueRows ?? [];
+    const { data: assignmentRows } = await supabase
+      .from("user_venues")
+      .select("user_id, venue_id, role");
+    assignments = (assignmentRows ?? []) as ManagerAssignment[];
+  }
+
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
@@ -119,8 +140,8 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            V systému jsou tito uživatelé. Všichni mají stejná práva — vidí a
-            mohou editovat všechna data.
+            V systému jsou tito uživatelé. Přístup k jednotlivým provozovnám
+            spravuje admin v sekci „Přístup k provozovnám“ níže.
           </p>
 
           {/* Mobile: card list */}
@@ -212,6 +233,29 @@ export default async function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Přístup k provozovnám (jen admin) */}
+      {admin ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <UsersIcon className="size-4" />
+              Přístup k provozovnám
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Zaškrtni provozovny, ke kterým má uživatel přístup, a nastav roli.
+              Role <strong>admin</strong> vidí a spravuje všechny provozovny.
+            </p>
+            <UserVenuesManager
+              users={users.map((u) => ({ id: u.id, email: u.email ?? null }))}
+              venues={venues}
+              initialAssignments={assignments}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Vystavovatel */}
       <Card>
