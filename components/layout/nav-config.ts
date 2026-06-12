@@ -59,7 +59,10 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
 // dynamicky podle isAdmin propu v SidebarNav.
 export const ADMIN_NAV_GROUP: NavGroup = {
   label: "Správa",
-  items: [{ href: "/venues", label: "Provozovny", icon: Building2 }],
+  items: [
+    { href: "/venues", label: "Provozovny", icon: Building2 },
+    { href: "/users", label: "Uživatelé", icon: Users },
+  ],
 };
 
 export function isNavActive(pathname: string, href: string): boolean {

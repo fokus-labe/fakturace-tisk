@@ -255,6 +255,14 @@ export default async function SettingsPage() {
               venues={venues}
               initialAssignments={assignments}
             />
+            <div className="rounded-md border bg-muted/30 p-4 text-sm">
+              💡 Tohle je rychlý přehled přístupů. Kompletní správu uživatelů
+              (vytvoření, reset hesla, smazání) najdeš v sekci{" "}
+              <Link href="/users" className="font-medium underline">
+                Správa → Uživatelé
+              </Link>
+              .
+            </div>
           </CardContent>
         </Card>
       ) : null}
