@@ -25,20 +25,31 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const pathname = request.nextUrl.pathname;
   const isLogin = pathname === "/login";
   const isPublicApi = pathname.startsWith("/api/invoice-requests");
+
+  // Timeout guard: getUser() se nikdy nesmí věšet donekonečna.
+  // Když Supabase neodpoví do 5 s, bereme to jako "nepřihlášený" a jedeme dál.
+  let user = null;
+  try {
+    const result = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("auth-timeout")), 5000),
+      ),
+    ]);
+    user = result.data.user;
+  } catch (e) {
+    console.error("[middleware] getUser selhalo/timeout:", e);
+    // user zůstává null → níž se to zachová jako u nepřihlášeného
+  }
 
   if (!user && !isLogin && !isPublicApi) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
-
   if (user && isLogin) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
