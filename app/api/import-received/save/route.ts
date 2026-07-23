@@ -45,6 +45,8 @@ const invoiceSchema = z.object({
 });
 
 const batchSchema = z.object({
+  // počet reálných zdrojových souborů (fotky/PDF); faktur může být míň (seskupení stran)
+  source_file_count: z.coerce.number().int().nonnegative().optional(),
   invoices: z.array(invoiceSchema).min(1).max(50),
 });
 
@@ -223,6 +225,8 @@ export async function POST(req: NextRequest) {
         venue_id: venue.id,
         kind: "received",
         file_count: parsed.data.invoices.length,
+        source_file_count:
+          parsed.data.source_file_count ?? parsed.data.invoices.length,
         invoice_count_created: results.created,
         invoice_count_failed: results.failed,
         client_count_created: suppliersCreated,

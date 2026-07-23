@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ReceivedInvoiceStatusBadge } from "@/components/received-invoice/received-invoice-status-badge";
 import { ReceivedInvoiceStepper } from "@/components/received-invoice/received-invoice-stepper";
+import { AttachmentViewer } from "@/components/received-invoice/attachment-viewer";
 import { ReceivedInvoiceActions } from "./received-invoice-actions";
 import { formatCZK, formatDate } from "@/lib/utils/format";
 import {
@@ -180,22 +181,13 @@ export default async function ReceivedInvoiceDetailPage({ params }: PageProps) {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <FileText className="size-4" />
-              PDF příloha
+              Příloha
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <a
-              href={`/api/received-invoices/${invoice.id}/pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline text-sm"
-            >
-              Otevřít v novém okně
-            </a>
-            <iframe
-              src={`/api/received-invoices/${invoice.id}/pdf`}
-              className="w-full h-[600px] rounded-md border"
-              title="PDF přílohy"
+          <CardContent>
+            <AttachmentViewer
+              invoiceId={invoice.id}
+              pdfUrl={invoice.pdf_url}
             />
           </CardContent>
         </Card>

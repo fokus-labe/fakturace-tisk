@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -8,11 +8,12 @@ import {
   Loader2,
   Plus,
   Trash2,
-  Upload,
   XCircle,
 } from "lucide-react";
 import pLimit from "p-limit";
 import { toast } from "sonner";
+import { FileGroupStage } from "@/components/import/file-group-stage";
+import type { InvoiceGroup } from "@/lib/import/file-processing";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -64,7 +65,11 @@ interface EditableInvoice {
 }
 
 interface FileResult {
+  /** primární popisek (název 1. souboru, nebo „Faktura, N stran") */
   filename: string;
+  /** názvy všech zdrojových souborů faktury v pořadí stran */
+  filenames: string[];
+  pageCount: number;
   status: "pending" | "processing" | "done" | "error";
   data?: EditableInvoice;
   confidence?: Confidence;
@@ -73,9 +78,6 @@ interface FileResult {
   approved: boolean;
   usage?: { input_tokens: number; output_tokens: number };
 }
-
-const MAX_FILES = 30;
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 function itemsTotal(items: EditableItem[]) {
   let noVat = 0;
@@ -111,61 +113,23 @@ function confidenceBadge(c: Confidence | undefined) {
 }
 
 export function ImportClient() {
-  const [files, setFiles] = useState<File[]>([]);
   const [results, setResults] = useState<FileResult[]>([]);
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
-  const [dragActive, setDragActive] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const addFiles = useCallback(
-    (incoming: FileList | File[]) => {
-      const arr = Array.from(incoming);
-      const accepted: File[] = [];
-      for (const f of arr) {
-        if (f.type !== "application/pdf") {
-          toast.error(`${f.name}: pouze PDF soubory`);
-          continue;
-        }
-        if (f.size > MAX_FILE_SIZE) {
-          toast.error(`${f.name}: soubor je větší než 10 MB`);
-          continue;
-        }
-        accepted.push(f);
-      }
-      setFiles((prev) => {
-        const next = [...prev, ...accepted];
-        if (next.length > MAX_FILES) {
-          toast.error(`Maximálně ${MAX_FILES} souborů najednou`);
-          return next.slice(0, MAX_FILES);
-        }
-        return next;
-      });
-    },
-    [],
-  );
-
-  const onDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      setDragActive(false);
-      if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
-    },
-    [addFiles],
-  );
-
-  const removeFile = (idx: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const processAll = async () => {
-    if (files.length === 0) return;
+  const processGroups = async (groups: InvoiceGroup[]) => {
+    if (groups.length === 0) return;
     setProcessing(true);
 
-    const initial: FileResult[] = files.map((f) => ({
-      filename: f.name,
+    const initial: FileResult[] = groups.map((g) => ({
+      filename:
+        g.files.length > 1
+          ? `Faktura, ${g.files.length} str. (${g.files[0].originalName})`
+          : g.files[0].originalName,
+      filenames: g.files.map((f) => f.originalName),
+      pageCount: g.files.length,
       status: "pending",
       approved: false,
     }));
@@ -173,13 +137,13 @@ export function ImportClient() {
 
     const limit = pLimit(3);
     await Promise.all(
-      files.map((file, idx) =>
+      groups.map((group, idx) =>
         limit(async () => {
           setResults((prev) =>
             prev.map((r, i) => (i === idx ? { ...r, status: "processing" } : r)),
           );
           const fd = new FormData();
-          fd.append("file", file);
+          for (const pf of group.files) fd.append("files", pf.file);
           try {
             const res = await fetch("/api/import/parse-pdf", {
               method: "POST",
@@ -295,6 +259,7 @@ export function ImportClient() {
     setSaving(true);
     try {
       const payload = {
+        source_file_count: approved.reduce((s, r) => s + (r.pageCount || 1), 0),
         invoices: approved.map((r) => ({
           filename: r.filename,
           client: {
@@ -369,94 +334,25 @@ export function ImportClient() {
       <div>
         <h1 className="font-heading text-2xl">Hromadný import faktur</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Nahraj PDF historických vydaných faktur. Systém je přečte pomocí AI a
-          vytáhne data. Po kontrole je uloží jako archivované faktury.
+          Nahraj PDF nebo fotky historických vydaných faktur (i focené mobilem,
+          včetně HEIC z iPhonu). Systém je přečte pomocí AI a vytáhne data. Po
+          kontrole je uloží jako archivované faktury.
         </p>
       </div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
         <AlertTriangle className="mr-2 inline size-4" />
-        Tato funkce používá AI ke čtení PDF. Vždy si výsledky před uložením
-        zkontroluj.
+        Tato funkce používá AI ke čtení PDF i fotek. Vždy si výsledky před
+        uložením zkontroluj.
       </div>
 
-      {/* Drop zone */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragActive(true);
-        }}
-        onDragLeave={() => setDragActive(false)}
-        onDrop={onDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={cn(
-          "flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-10 text-center transition-colors",
-          dragActive
-            ? "border-primary bg-primary/5"
-            : "border-muted-foreground/25 hover:border-muted-foreground/50",
-        )}
-      >
-        <Upload className="mb-3 size-8 text-muted-foreground" />
-        <p className="font-medium">Přetáhni PDF sem nebo klikni pro výběr</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Max {MAX_FILES} souborů, 10 MB každý
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/pdf"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) addFiles(e.target.files);
-            e.target.value = "";
-          }}
+      {/* Výběr souborů + seskupování stránek do faktur */}
+      {results.length === 0 && (
+        <FileGroupStage
+          key={historyKey}
+          onProcess={processGroups}
+          processing={processing}
         />
-      </div>
-
-      {/* Soubory čekající na zpracování */}
-      {files.length > 0 && results.length === 0 && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Připraveno ke zpracování ({files.length})</CardTitle>
-            <Button onClick={processAll} disabled={processing}>
-              {processing ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Zpracovávám…
-                </>
-              ) : (
-                <>Spustit OCR ({files.length})</>
-              )}
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-1 text-sm">
-              {files.map((f, idx) => (
-                <li
-                  key={idx}
-                  className="flex items-center justify-between rounded border bg-muted/30 px-3 py-1.5"
-                >
-                  <span className="flex items-center gap-2 truncate">
-                    <FileText className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{f.name}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {(f.size / 1024).toFixed(0)} KB
-                    </span>
-                  </span>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    onClick={() => removeFile(idx)}
-                    aria-label="Odebrat"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
       )}
 
       {/* Progress */}
@@ -588,20 +484,32 @@ export function ImportClient() {
                 </div>
               )}
             </div>
-            <Button
-              size="lg"
-              onClick={saveApproved}
-              disabled={saving || stats.approved === 0}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Ukládám…
-                </>
-              ) : (
-                <>Importovat {stats.approved} schválených</>
-              )}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setResults([]);
+                  setHistoryKey((k) => k + 1);
+                }}
+                disabled={saving}
+              >
+                Zahodit výsledky
+              </Button>
+              <Button
+                size="lg"
+                onClick={saveApproved}
+                disabled={saving || stats.approved === 0}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Ukládám…
+                  </>
+                ) : (
+                  <>Importovat {stats.approved} schválených</>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

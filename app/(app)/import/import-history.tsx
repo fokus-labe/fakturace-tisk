@@ -19,6 +19,8 @@ export interface ImportRecord {
   user_email: string | null;
   kind?: "issued" | "received" | null;
   file_count: number;
+  /** počet reálných zdrojových souborů (může být víc než faktur kvůli seskupení stran) */
+  source_file_count?: number | null;
   invoice_count_created: number;
   invoice_count_failed: number;
   client_count_created: number;
@@ -161,6 +163,13 @@ export function ImportHistory({
                     <span className="font-mono tabular-nums">
                       {imp.invoice_count_created}/{imp.file_count}
                     </span>
+                    {imp.source_file_count != null &&
+                    imp.source_file_count !== imp.file_count ? (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        ({imp.source_file_count} souborů)
+                      </span>
+                    ) : null}
                   </div>
                   <div>
                     <span className="text-muted-foreground">{entityLabel}:</span>{" "}
@@ -222,6 +231,13 @@ export function ImportHistory({
                     </td>
                     <td className="px-4 py-3 text-right font-mono tabular-nums">
                       {imp.invoice_count_created}/{imp.file_count}
+                      {imp.source_file_count != null &&
+                      imp.source_file_count !== imp.file_count ? (
+                        <span className="text-muted-foreground">
+                          {" "}
+                          ({imp.source_file_count} s.)
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-right font-mono tabular-nums">
                       +{imp.client_count_created}
@@ -272,6 +288,12 @@ export function ImportHistory({
                     label="Faktury"
                     value={`${detail.invoice_count_created} / ${detail.file_count}`}
                   />
+                  {detail.source_file_count != null ? (
+                    <Row
+                      label="Zdrojových souborů"
+                      value={String(detail.source_file_count)}
+                    />
+                  ) : null}
                   <Row
                     label={entityLabel}
                     value={`+${detail.client_count_created}`}
