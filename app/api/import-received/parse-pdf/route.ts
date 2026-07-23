@@ -1,11 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { extractReceivedInvoiceFromPdf } from "@/lib/anthropic/extract-received-invoice";
+import { extractReceivedInvoiceFromSources } from "@/lib/anthropic/extract-received-invoice";
+import { validateInvoiceFiles } from "@/lib/import/server-validate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -30,36 +29,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
   }
 
-  const file = formData.get("file");
-  if (!(file instanceof File)) {
+  // Jedna faktura = 1+ souborů v pořadí stran. Zpětně kompatibilní se starým "file".
+  const files = [
+    ...formData.getAll("files"),
+    ...formData.getAll("file"),
+  ].filter((f): f is File => f instanceof File);
+  if (files.length === 0) {
     return NextResponse.json({ error: "Soubor chybí" }, { status: 400 });
   }
-  if (file.type !== "application/pdf") {
+
+  let validated;
+  try {
+    validated = await validateInvoiceFiles(files);
+  } catch (err) {
     return NextResponse.json(
-      { error: "Pouze PDF soubory jsou akceptovány" },
-      { status: 400 },
-    );
-  }
-  if (file.size > MAX_FILE_SIZE) {
-    return NextResponse.json(
-      { error: "PDF je příliš velký (max 10 MB)" },
+      { error: err instanceof Error ? err.message : "Neplatné soubory" },
       { status: 400 },
     );
   }
 
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const base64 = buffer.toString("base64");
-
-    const { extracted, usage } = await extractReceivedInvoiceFromPdf(base64);
+    const { extracted, usage } = await extractReceivedInvoiceFromSources(
+      validated.sources,
+      validated.multiPageImage,
+    );
 
     console.log(
-      `[OCR received] ${file.name}: in ${usage.input_tokens} / out ${usage.output_tokens} tokens`,
+      `[OCR received] ${files.map((f) => f.name).join(", ")} (${files.length} str.): in ${usage.input_tokens} / out ${usage.output_tokens} tokens`,
     );
 
     return NextResponse.json({
       success: true,
-      filename: file.name,
+      filename: files[0]?.name ?? null,
       extracted,
       usage,
     });

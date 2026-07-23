@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { anthropic, OCR_MODEL } from "./client";
+import { buildUserContent } from "./content";
+import type { PageSource } from "@/lib/import/server-validate";
 
 export const extractedInvoiceSchema = z.object({
   client: z.object({
@@ -107,8 +109,9 @@ function stripCodeFence(text: string): string {
     .trim();
 }
 
-export async function extractInvoiceFromPdf(
-  pdfBase64: string,
+export async function extractInvoiceFromSources(
+  sources: PageSource[],
+  multiPageImage = false,
 ): Promise<ExtractResult> {
   const response = await anthropic.messages.create({
     model: OCR_MODEL,
@@ -117,17 +120,7 @@ export async function extractInvoiceFromPdf(
     messages: [
       {
         role: "user",
-        content: [
-          {
-            type: "document",
-            source: {
-              type: "base64",
-              media_type: "application/pdf",
-              data: pdfBase64,
-            },
-          },
-          { type: "text", text: USER_PROMPT },
-        ],
+        content: buildUserContent(sources, USER_PROMPT, multiPageImage),
       },
     ],
   });
