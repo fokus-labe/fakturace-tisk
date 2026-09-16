@@ -89,6 +89,36 @@ export async function PATCH(
     }
   }
 
+  // Při vystavení je variabilní symbol povinný — vynucujeme i na serveru
+  // (ne jen v dialogu invoice-actions.tsx). VS může přijít v těle requestu
+  // nebo už být uložený na existujícím řádku.
+  if (patch.status === "invoice_issued") {
+    let effectiveVs: string | null;
+    if ("variable_symbol" in patch) {
+      effectiveVs =
+        typeof patch.variable_symbol === "string" &&
+        patch.variable_symbol.trim().length > 0
+          ? patch.variable_symbol.trim()
+          : null;
+    } else {
+      const { data: current } = await supabase
+        .from("invoice_requests")
+        .select("variable_symbol")
+        .eq("id", id)
+        .single();
+      effectiveVs =
+        current?.variable_symbol && current.variable_symbol.trim().length > 0
+          ? current.variable_symbol.trim()
+          : null;
+    }
+    if (!effectiveVs) {
+      return NextResponse.json(
+        { error: "Zadej variabilní symbol" },
+        { status: 400 },
+      );
+    }
+  }
+
   const { data, error } = await supabase
     .from("invoice_requests")
     .update(patch)

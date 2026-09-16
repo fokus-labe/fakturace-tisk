@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -49,23 +50,24 @@ const RECEIVED_PILLS: {
 export default async function Dashboard() {
   const supabase = await createClient();
   const venue = await getActiveVenue();
-  const venueId = venue?.id;
+  if (!venue) redirect("/no-access");
+  const venueId = venue.id;
 
-  let issuedQuery = supabase
+  const issuedQuery = supabase
     .from("invoice_requests")
     .select(
       "*, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)",
     )
+    .eq("venue_id", venueId)
     .order("created_at", { ascending: false })
     .limit(200);
-  if (venueId) issuedQuery = issuedQuery.eq("venue_id", venueId);
 
-  let receivedQuery = supabase
+  const receivedQuery = supabase
     .from("received_invoices")
     .select("*, supplier:suppliers(name)")
+    .eq("venue_id", venueId)
     .order("created_at", { ascending: false })
     .limit(200);
-  if (venueId) receivedQuery = receivedQuery.eq("venue_id", venueId);
 
   const [{ data: issued }, { data: received }, stats] = await Promise.all([
     issuedQuery,

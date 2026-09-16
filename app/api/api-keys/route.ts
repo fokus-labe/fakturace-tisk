@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { generateApiKey, hashApiKey } from "@/lib/auth/api-key";
+import { isAdmin } from "@/lib/venues/is-admin";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
 
 export const runtime = "nodejs";
 
@@ -17,10 +19,15 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await isAdmin()))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  // RLS vrací jen klíče provozoven, ke kterým má user přístup (admin vidí vše).
   const { data, error } = await supabase
     .from("api_keys")
-    .select("id, name, key_prefix, scopes, created_at, last_used_at, revoked_at")
+    .select(
+      "id, name, key_prefix, scopes, created_at, last_used_at, revoked_at, venue_id, venue:venues(name, slug)",
+    )
     .order("created_at", { ascending: false });
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -34,10 +41,17 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await isAdmin()))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success)
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+
+  // Klíč patří aktuálně aktivní provozovně.
+  const venue = await getActiveVenue();
+  if (!venue)
+    return NextResponse.json({ error: "No venue access" }, { status: 403 });
 
   const { key, prefix } = generateApiKey();
   const keyHash = await hashApiKey(key);
@@ -49,9 +63,10 @@ export async function POST(req: NextRequest) {
       key_hash: keyHash,
       key_prefix: prefix,
       scopes: parsed.data.scopes ?? [],
+      venue_id: venue.id,
       created_by: user.id,
     })
-    .select("id, name, key_prefix, scopes, created_at")
+    .select("id, name, key_prefix, scopes, created_at, venue_id")
     .single();
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });

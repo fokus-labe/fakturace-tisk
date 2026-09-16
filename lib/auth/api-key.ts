@@ -32,6 +32,7 @@ export interface AuthenticatedApiKey {
   id: string;
   name: string;
   scopes: string[];
+  venue_id: string | null;
 }
 
 export async function authenticateApiKey(
@@ -40,7 +41,7 @@ export async function authenticateApiKey(
 ): Promise<AuthenticatedApiKey | null> {
   const { data: keys, error } = await supabase
     .from("api_keys")
-    .select("id, name, scopes, key_hash")
+    .select("id, name, scopes, venue_id, key_hash")
     .is("revoked_at", null);
 
   if (error || !keys) return null;
@@ -51,7 +52,12 @@ export async function authenticateApiKey(
         .from("api_keys")
         .update({ last_used_at: new Date().toISOString() })
         .eq("id", k.id);
-      return { id: k.id, name: k.name, scopes: k.scopes ?? [] };
+      return {
+        id: k.id,
+        name: k.name,
+        scopes: k.scopes ?? [],
+        venue_id: k.venue_id ?? null,
+      };
     }
   }
   return null;

@@ -82,6 +82,19 @@ function defaultFromDate(): Date {
   return d;
 }
 
+// Vytáhne filename z Content-Disposition hlavičky, ať se klient a server neliší
+// (server posílá per-venue název ETN_{slug}_{od}_{do}.xlsx).
+function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const m = header.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  if (!m) return null;
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return m[1];
+  }
+}
+
 const ISSUED_PAYMENT_LABELS: Record<string, string> = {
   fakturace: "fakturace",
   hotovost: "hotovost",
@@ -167,11 +180,14 @@ export function EtnExportClient() {
       toast.error("Export selhal", { description: j?.error });
       return;
     }
+    const serverFilename = filenameFromDisposition(
+      res.headers.get("Content-Disposition"),
+    );
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ETN_Fokus_tisk_${periodStart}_${periodEnd}.xlsx`;
+    a.download = serverFilename ?? `ETN_${periodStart}_${periodEnd}.xlsx`;
     document.body.appendChild(a);
     a.click();
     a.remove();

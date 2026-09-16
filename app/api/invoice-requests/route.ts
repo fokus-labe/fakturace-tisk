@@ -5,11 +5,7 @@ import {
   isApiKeyHeader,
 } from "@/lib/auth/api-key";
 import { invoiceRequestSchema } from "@/lib/validations/invoice";
-import {
-  getActiveVenue,
-  getVenueIdBySlug,
-  DEFAULT_VENUE_SLUG,
-} from "@/lib/venues/get-user-venues";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
 
 export const runtime = "nodejs";
 
@@ -18,6 +14,8 @@ type AuthOk = {
   mode: "user" | "api_key";
   service: ReturnType<typeof createServiceClient>;
   userId: string | null;
+  // Provozovna vázaná na API klíč (jen v api_key módu).
+  apiKeyVenueId: string | null;
 };
 
 async function authenticate(req: NextRequest): Promise<AuthOk | { ok: false }> {
@@ -26,7 +24,13 @@ async function authenticate(req: NextRequest): Promise<AuthOk | { ok: false }> {
     const service = createServiceClient();
     const auth = await authenticateApiKey(service, apiKey);
     if (!auth) return { ok: false as const };
-    return { ok: true as const, mode: "api_key" as const, service, userId: null };
+    return {
+      ok: true as const,
+      mode: "api_key" as const,
+      service,
+      userId: null,
+      apiKeyVenueId: auth.venue_id,
+    };
   }
   const supabase = await createClient();
   const {
@@ -38,13 +42,15 @@ async function authenticate(req: NextRequest): Promise<AuthOk | { ok: false }> {
     mode: "user" as const,
     service: supabase as unknown as ReturnType<typeof createServiceClient>,
     userId: user.id,
+    apiKeyVenueId: null,
   };
 }
 
 /**
  * Resolve venue_id pro daný auth kontext.
  * - user: aktivní venue (default fokus-tisk) přes RLS klienta
- * - api_key (eshop): default fokus-tisk přes service klienta
+ * - api_key (eshop): provozovna vázaná na klíč; slug se ignoruje, klíč
+ *   nemůže zapisovat do cizí provozovny. Bez venue → null (→ 403).
  */
 async function resolveVenueId(
   auth: AuthOk,
@@ -54,7 +60,7 @@ async function resolveVenueId(
     const venue = await getActiveVenue(slug);
     return venue?.id ?? null;
   }
-  return getVenueIdBySlug(auth.service, slug ?? DEFAULT_VENUE_SLUG);
+  return auth.apiKeyVenueId ?? null;
 }
 
 export async function GET(req: NextRequest) {
