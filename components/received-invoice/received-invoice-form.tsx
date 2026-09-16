@@ -141,13 +141,19 @@ export function ReceivedInvoiceForm({
     }
   }, [amountNoVat, amountVat, setValue]);
 
-  // Auto-zaškrtnout "Označit jako zaplaceno hned" pro hotovostní platby
-  useEffect(() => {
-    if (mode !== "create") return;
-    if (paymentMethod === "hotovost" || paymentMethod === "dobirka") {
+  // Auto-zaškrtnout "Označit jako zaplaceno hned" při změně na hotovostní platbu
+  // (úprava stavu během renderu podle změny paymentMethod — místo effectu se
+  // synchronním setState).
+  const [prevPaymentMethod, setPrevPaymentMethod] = useState(paymentMethod);
+  if (paymentMethod !== prevPaymentMethod) {
+    setPrevPaymentMethod(paymentMethod);
+    if (
+      mode === "create" &&
+      (paymentMethod === "hotovost" || paymentMethod === "dobirka")
+    ) {
       setMarkPaidNow(true);
     }
-  }, [paymentMethod, mode]);
+  }
 
   const computedTotal = useMemo(() => {
     const noVat = Number(amountNoVat ?? 0);

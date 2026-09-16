@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -52,14 +52,17 @@ export function EditUserDialog({
   const [access, setAccess] = useState<AccessMap>(new Map());
   const [saving, setSaving] = useState(false);
 
-  // Předvyplň formulář při otevření / změně usera
-  useEffect(() => {
+  // Předvyplň formulář při změně usera — úprava stavu během renderu podle změny
+  // `user` (React-doporučený vzor místo effectu se synchronním setState).
+  const [prevUser, setPrevUser] = useState(user);
+  if (user !== prevUser) {
+    setPrevUser(user);
     if (user) {
       setEmail(user.email ?? "");
       setIsAdmin(user.isAdmin);
       setAccess(buildAccessMap(user));
     }
-  }, [user]);
+  }
 
   const submit = async () => {
     if (!user) return;

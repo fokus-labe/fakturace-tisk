@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,12 +30,16 @@ export function DeleteUserDialog({
   const [confirmEmail, setConfirmEmail] = useState("");
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
+  // Reset formuláře při (znovu)otevření — úprava stavu během renderu podle změny
+  // `open` (React-doporučený vzor místo effectu se synchronním setState).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setConfirmEmail("");
       setDeleting(false);
     }
-  }, [open]);
+  }
 
   const matches = !!user?.email && confirmEmail.trim() === user.email;
 

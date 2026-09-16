@@ -54,7 +54,21 @@ export default async function EditInvoicePage({ params }: PageProps) {
       (a: { order_index: number }, b: { order_index: number }) =>
         a.order_index - b.order_index,
     )
-    .map(({ order_index: _omit, ...rest }: { order_index: number }) => rest);
+    // order_index sloužil jen k seřazení — do formuláře ho nepředáváme
+    .map(
+      (it: {
+        description: string;
+        quantity: number;
+        unit_price_no_vat: number;
+        vat_rate: number;
+        order_index: number;
+      }) => ({
+        description: it.description,
+        quantity: it.quantity,
+        unit_price_no_vat: it.unit_price_no_vat,
+        vat_rate: it.vat_rate,
+      }),
+    );
 
   return (
     <div className="space-y-6">

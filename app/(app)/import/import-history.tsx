@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle2, FileText, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -97,27 +97,31 @@ export function ImportHistory({
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<ImportRecord | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const url = kind
-        ? `/api/import/history?kind=${kind}`
-        : "/api/import/history";
-      const res = await fetch(url);
-      if (!res.ok) {
-        setHistory([]);
-        return;
-      }
-      const json = await res.json();
-      setHistory(json.imports ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [kind]);
-
   useEffect(() => {
-    void load();
-  }, [load, refreshKey]);
+    let cancelled = false;
+    async function run() {
+      setLoading(true);
+      try {
+        const url = kind
+          ? `/api/import/history?kind=${kind}`
+          : "/api/import/history";
+        const res = await fetch(url);
+        if (cancelled) return;
+        if (!res.ok) {
+          setHistory([]);
+          return;
+        }
+        const json = await res.json();
+        if (!cancelled) setHistory(json.imports ?? []);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, refreshKey]);
 
   return (
     <section className="space-y-4">

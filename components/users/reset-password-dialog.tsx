@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,20 +27,23 @@ export function ResetPasswordDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState(generatePassword);
   const [manual, setManual] = useState(false);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
 
-  // Reset stavu při (znovu)otevření
-  useEffect(() => {
+  // Reset stavu při (znovu)otevření — úprava stavu během renderu podle změny
+  // `open` (React-doporučený vzor místo effectu se synchronním setState).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setPassword(generatePassword());
       setManual(false);
       setSaving(false);
       setDone(false);
     }
-  }, [open]);
+  }
 
   const submit = async () => {
     if (!user) return;

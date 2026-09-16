@@ -20,7 +20,7 @@ const SelectionSchema = z.object({
   receivedIds: z.array(z.string().uuid()).default([]),
   periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  venue: z.string().optional(),
+  venue_slug: z.string().optional(),
 });
 
 // Diakritika → ASCII, bez mezer a oddělovačů (pro názvy souborů v ZIPu).
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
 
-  const venue = await getActiveVenue(parsed.data.venue);
+  const venue = await getActiveVenue(parsed.data.venue_slug);
   if (!venue)
     return NextResponse.json({ error: "No venue access" }, { status: 403 });
 

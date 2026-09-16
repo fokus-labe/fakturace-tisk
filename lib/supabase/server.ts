@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createServiceJsClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 export async function createClient() {
@@ -26,9 +27,11 @@ export async function createClient() {
   );
 }
 
+// Service-role klient (obchází RLS) — server-only. Statický import je bez rizika:
+// @supabase/ssr (cookie klient výše) už @supabase/supabase-js do bundlu stahuje,
+// takže dřívější lazy require() nešetřil nic; require() jen porušoval lint.
 export function createServiceClient() {
-  const { createClient: createJs } = require("@supabase/supabase-js") as typeof import("@supabase/supabase-js");
-  return createJs(
+  return createServiceJsClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false, autoRefreshToken: false } },

@@ -146,7 +146,11 @@ export function EtnExportClient() {
   }
 
   useEffect(() => {
-    loadHistory();
+    // Async wrapper — setState (spinner) tak neběží synchronně v těle effectu.
+    async function run() {
+      await loadHistory();
+    }
+    void run();
   }, []);
 
   async function fetchPreview() {
