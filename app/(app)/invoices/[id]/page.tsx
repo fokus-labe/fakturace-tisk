@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { InvoiceStatusBadge } from "@/components/invoice/invoice-status-badge";
+import { EtnExportBadge, etnExportInfo } from "@/components/etn/etn-export-badge";
 import { InvoiceStepper } from "@/components/invoice/invoice-stepper";
 import { InvoiceActions } from "./invoice-actions";
 import { formatCZK, formatDate } from "@/lib/utils/format";
@@ -27,10 +28,14 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   const supabase = await createClient();
   const { data: invoice } = await supabase
     .from("invoice_requests")
-    .select("*, client:clients(*), items:invoice_items(*)")
+    .select(
+      "*, client:clients(*), items:invoice_items(*), etn_export:etn_exports(id, period_start, period_end)",
+    )
     .eq("id", id)
     .single();
   if (!invoice) notFound();
+
+  const etnExport = etnExportInfo(invoice.etn_export);
 
   const items = (invoice.items ?? [])
     .map((it: { id: string; description: string; quantity: number | string; unit_price_no_vat: number | string; vat_rate: number | string; order_index: number }) => ({
@@ -63,6 +68,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               {invoice.client?.name ?? "—"}
             </h1>
             <InvoiceStatusBadge status={invoice.status} />
+            {etnExport ? <EtnExportBadge export={etnExport} asLink /> : null}
           </div>
           <p className="text-sm text-muted-foreground">
             VS {invoice.variable_symbol || "—"} ·{" "}

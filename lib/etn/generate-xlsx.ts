@@ -30,14 +30,24 @@ export interface EtnReportInput {
   venueName?: string;
 }
 
-// Labels pro lidskou čitelnost sloupce D u nákladů.
-// POZOR: hotovost MUSÍ zůstat literál "hotovost" kvůli SUMIF na řádku 60.
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  faktura: "faktura",
-  hotovost: "hotovost",
-  dodaci_list: "dodací list",
-  dobirka: "dobírka",
-};
+// Mapování způsobu platby přijaté faktury na hodnotu ve sloupci D nákladů.
+// Jediné místo tohoto mapování v celém souboru.
+// POZOR: SUMIF v D60 sčítá náklady podle literálu "hotovost". Dobírka i dodací
+// list se fyzicky platí hotově, proto se do sloupce D zapisují jako "hotovost"
+// (jinak by se do vyúčtování hotovosti nezapočítaly). Faktura zůstává fakturou.
+// V UI aplikace zůstávají dobírka i dodací list beze změny — mění se jen ETN.
+export function receivedPaymentMethodToEtnCell(paymentMethod: string): string {
+  switch (paymentMethod) {
+    case "faktura":
+      return "faktura";
+    case "hotovost":
+    case "dobirka":
+    case "dodaci_list":
+      return "hotovost";
+    default:
+      return paymentMethod;
+  }
+}
 
 // === FONT KONSTANTY (Petrův exaktní styl) ===
 const FONT_NAME = "Calibri";
@@ -213,9 +223,8 @@ export async function generateEtnXlsx(
     cC.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
 
     const cD = sheet.getCell(r, 4);
-    // Kritické: "hotovost" musí zůstat literál pro SUMIF.
-    cD.value =
-      PAYMENT_METHOD_LABELS[inv.payment_method] ?? inv.payment_method;
+    // Kritické: "hotovost" musí zůstat literál pro SUMIF (viz funkce výše).
+    cD.value = receivedPaymentMethodToEtnCell(inv.payment_method);
     cD.font = FONT_DATA;
     cD.alignment = { horizontal: "center", vertical: "middle" };
 

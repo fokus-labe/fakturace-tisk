@@ -5,6 +5,7 @@ export type DatePreset =
   | "all"
   | "this_month"
   | "last_month"
+  | "this_and_last_month"
   | "this_year"
   | "last_year"
   | "custom";
@@ -28,6 +29,9 @@ export function presetToRange(preset: DatePreset): {
       return { from: fmt(new Date(y, m, 1)), to: fmt(new Date(y, m + 1, 0)) };
     case "last_month":
       return { from: fmt(new Date(y, m - 1, 1)), to: fmt(new Date(y, m, 0)) };
+    case "this_and_last_month":
+      // Minulý + tento měsíc (16. 9. → 1. 8. až 30. 9.)
+      return { from: fmt(new Date(y, m - 1, 1)), to: fmt(new Date(y, m + 1, 0)) };
     case "this_year":
       return { from: fmt(new Date(y, 0, 1)), to: fmt(new Date(y, 11, 31)) };
     case "last_year":

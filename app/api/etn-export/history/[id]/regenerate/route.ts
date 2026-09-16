@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateEtnXlsx } from "@/lib/etn/generate-xlsx";
-import { fetchEtnPeriodData } from "@/lib/etn/fetch-period-data";
+import { fetchEtnInvoicesByExportId } from "@/lib/etn/fetch-selection-data";
 
 export const runtime = "nodejs";
 
@@ -65,14 +65,12 @@ export async function POST(
       { status: 400 },
     );
 
+  // Zdroj dat = faktury navázané na tento export (etn_export_id), NE opětovný
+  // dotaz podle období. Jinak by se do starého exportu propsaly pozdější změny.
+  // Období slouží už jen do hlavičky a názvu souboru.
   let data;
   try {
-    data = await fetchEtnPeriodData(
-      supabase,
-      exp.period_start,
-      exp.period_end,
-      venue.id,
-    );
+    data = await fetchEtnInvoicesByExportId(supabase, venue.id, id);
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Načtení dat selhalo" },
@@ -83,8 +81,8 @@ export async function POST(
   const buffer = await generateEtnXlsx({
     periodStart: new Date(exp.period_start),
     periodEnd: new Date(exp.period_end),
-    receivedInvoices: data.receivedInvoices,
-    issuedInvoices: data.issuedInvoices,
+    receivedInvoices: data.received,
+    issuedInvoices: data.issued,
     venueName: venue.name,
   });
 
