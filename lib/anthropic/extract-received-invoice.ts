@@ -7,9 +7,24 @@ import {
   RECEIVED_PAYMENT_METHODS,
 } from "@/lib/validations/supplier";
 
+// Vyúčtování Shoptet Pay / faktura Zásilkovny obsahují náklad i tržbu zároveň.
+export const extractedSettlementSchema = z.object({
+  statement_number: z.string().min(1),
+  statement_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // brutto − poplatek = netto
+  gross_amount: z.coerce.number(),
+  fee_amount: z.coerce.number(),
+  net_amount: z.coerce.number(),
+});
+
 export const extractedReceivedInvoiceSchema = z.object({
+  // typ dokladu: běžná přijatá faktura, nebo vyúčtování obsahující náklad+tržbu
+  doc_type: z
+    .enum(["invoice", "shoptet_pay", "zasilkovna"])
+    .default("invoice"),
+  settlement: extractedSettlementSchema.optional().nullable(),
   supplier: z.object({
-    name: z.string().min(1),
+    name: z.string().optional().nullable(),
     ico: z
       .string()
       .regex(/^\d{8}$/)
@@ -21,15 +36,19 @@ export const extractedReceivedInvoiceSchema = z.object({
     address_zip: z.string().optional().nullable(),
   }),
   supplier_invoice_number: z.string().optional().nullable(),
-  issued_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  issued_at: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .nullable(),
   due_date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional()
     .nullable(),
-  amount_no_vat: z.coerce.number().nonnegative(),
-  amount_vat: z.coerce.number().nonnegative(),
-  amount_total: z.coerce.number().nonnegative(),
+  amount_no_vat: z.coerce.number().nonnegative().optional().nullable(),
+  amount_vat: z.coerce.number().nonnegative().optional().nullable(),
+  amount_total: z.coerce.number().nonnegative().optional().nullable(),
   vat_rate: z.coerce.number().min(0).max(100).optional().nullable(),
   payment_method: z.enum(RECEIVED_PAYMENT_METHODS).default("faktura"),
   category: z.enum(RECEIVED_INVOICE_CATEGORIES).default("ostatni"),
@@ -81,11 +100,47 @@ KATEGORIE (category) — odhadni podle položek:
 - "sluzby" = služby, práce, doprava, montáž
 - "potisk" = potisk, sítotisk, výšivka, gravírování
 - "obaly" = krabice, sáčky, obalový materiál
-- "ostatni" = vše ostatní (DEFAULT)`;
+- "ostatni" = vše ostatní (DEFAULT)
 
-const USER_PROMPT = `Vytáhni z této přijaté faktury strukturovaná data a vrať VÝHRADNĚ jako JSON object podle této struktury:
+TYP DOKLADU (doc_type) — NEJDŘÍV urči, o co jde:
+- "invoice" = běžná přijatá faktura od dodavatele (DEFAULT)
+- "shoptet_pay" = vyúčtování platební brány Shoptet Pay
+- "zasilkovna" = faktura / vyúčtování Zásilkovny (Packeta)
+
+Pokud je to "shoptet_pay" nebo "zasilkovna", vyplň navíc objekt "settlement".
+Tyto doklady obsahují ZÁROVEŇ náklad i tržbu — nepleť je do amount_* polí,
+ta nech null a vše dej do "settlement". Platí: brutto − poplatek = netto.
+
+SHOPTET PAY (settlement):
+- statement_number = číslo výpisu
+- statement_date = datum výpisu
+- gross_amount = "Příchozí platby celkem" (brutto)
+- fee_amount = "Smluvní poplatky" (poplatek)
+- net_amount = "Celkem vyplaceno" (netto)
+- Výpis o sobě říká, že NENÍ daňovým dokladem — to ale NEznamená, že se nemá
+  zaevidovat. Vždy ho zpracuj.
+
+ZÁSILKOVNA (settlement) — POZOR na záměnu tří částek, stojí vedle sebe:
+- statement_number = číslo faktury
+- statement_date = datum vystavení
+- fee_amount = FAKTUROVANÁ ČÁSTKA ZA SLUŽBY vč. DPH (jako náklad patří VŽDY jen
+  tahle částka za služby), typicky nejmenší, např. 249,41
+- gross_amount = VYBRANÉ DOBÍRKY (brutto), typicky největší, např. 878,00
+- net_amount = KOLIK BUDE ZASLÁNO / vyplaceno, např. 628,59
+- Ověř si: gross_amount − fee_amount = net_amount (878,00 − 249,41 = 628,59).
+- Faktura může být uhrazená zápočtem — to je v pořádku.`;
+
+const USER_PROMPT = `Vytáhni z tohoto dokladu strukturovaná data a vrať VÝHRADNĚ jako JSON object podle této struktury:
 
 {
+  "doc_type": "invoice | shoptet_pay | zasilkovna",
+  "settlement": {
+    "statement_number": "string (číslo výpisu/faktury)",
+    "statement_date": "YYYY-MM-DD",
+    "gross_amount": number,
+    "fee_amount": number,
+    "net_amount": number
+  } (jen u shoptet_pay/zasilkovna, jinak null),
   "supplier": {
     "name": "string (název dodavatele jak je na faktuře)",
     "ico": "string nebo null",

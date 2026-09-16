@@ -40,6 +40,9 @@ import {
   type ReceivedInvoiceCategory,
   type ReceivedPaymentMethod,
 } from "@/types/received-invoice";
+import { ClientCreateDialog } from "@/components/client/client-create-dialog";
+import { SettlementImportCard } from "@/components/settlements/settlement-import-card";
+import type { SettlementProvider } from "@/lib/settlements/compute";
 import { ImportHistory } from "../../import/import-history";
 
 export interface SupplierLite {
@@ -48,6 +51,22 @@ export interface SupplierLite {
   ico: string | null;
   default_payment_method: string | null;
   default_category: string | null;
+}
+
+export interface ClientLite {
+  id: string;
+  name: string;
+}
+
+export interface EditableSettlement {
+  provider: SettlementProvider;
+  statement_number: string;
+  statement_date: string;
+  gross: number;
+  fee: number;
+  net: number;
+  client_id: string | null;
+  client_name: string | null;
 }
 
 type Confidence = "high" | "medium" | "low";
@@ -80,7 +99,10 @@ interface FileResult {
   filenames: string[];
   pageCount: number;
   status: "pending" | "processing" | "done" | "error";
+  /** typ dokladu — běžná faktura, nebo vyúčtování (náklad + tržba) */
+  docType: "invoice" | SettlementProvider;
   data?: EditableReceivedInvoice;
+  settlement?: EditableSettlement;
   confidence?: Confidence;
   notes?: string | null;
   error?: string;
@@ -127,15 +149,20 @@ function confidenceBadge(c: Confidence | undefined) {
 
 export function ImportReceivedClient({
   suppliers,
+  clients: initialClients,
 }: {
   suppliers: SupplierLite[];
+  clients: ClientLite[];
 }) {
   const [results, setResults] = useState<FileResult[]>([]);
+  const [clients, setClients] = useState<ClientLite[]>(initialClients);
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  // Inline založení odběratele pro tržbu z vyúčtování (index řádku settlementu).
+  const [clientDialogFor, setClientDialogFor] = useState<number | null>(null);
 
   // Match dodavatele podle IČO (přesně), jinak podle názvu (case-insensitive).
   const matchSupplier = useCallback(
@@ -186,6 +213,7 @@ export function ImportReceivedClient({
       filenames: g.files.map((pf) => pf.originalName),
       pageCount: g.files.length,
       status: "pending",
+      docType: "invoice",
       approved: false,
       matchedSupplierId: null,
       matchedSupplierName: null,
@@ -211,6 +239,39 @@ export function ImportReceivedClient({
               throw new Error(json.error || "OCR selhalo");
             }
             const e = json.extracted;
+
+            // Vyúčtování (Shoptet Pay / Zásilkovna) — náklad + tržba v jednom.
+            if (e.doc_type === "shoptet_pay" || e.doc_type === "zasilkovna") {
+              const s = e.settlement ?? {};
+              const settlement: EditableSettlement = {
+                provider: e.doc_type as SettlementProvider,
+                statement_number: s.statement_number ?? "",
+                statement_date: s.statement_date ?? "",
+                gross: Number(s.gross_amount) || 0,
+                fee: Number(s.fee_amount) || 0,
+                net: Number(s.net_amount) || 0,
+                client_id: null,
+                client_name: null,
+              };
+              setResults((prev) =>
+                prev.map((r, i) =>
+                  i === idx
+                    ? {
+                        ...r,
+                        status: "done",
+                        docType: e.doc_type as SettlementProvider,
+                        settlement,
+                        confidence: e.confidence,
+                        notes: e.notes ?? null,
+                        usage: json.usage,
+                        approved: false,
+                      }
+                    : r,
+                ),
+              );
+              return;
+            }
+
             const matched = matchSupplier(
               e.supplier.ico ?? "",
               e.supplier.name ?? "",
@@ -322,100 +383,173 @@ export function ImportReceivedClient({
     );
   };
 
+  const updateSettlement = (
+    idx: number,
+    patch: Partial<EditableSettlement>,
+  ) => {
+    setResults((prev) =>
+      prev.map((r, i) =>
+        i === idx && r.settlement
+          ? { ...r, settlement: { ...r.settlement, ...patch } }
+          : r,
+      ),
+    );
+  };
+
+  const handleSettlementClientCreated = (client: {
+    id: string;
+    name: string;
+  }) => {
+    setClients((prev) =>
+      prev.some((c) => c.id === client.id) ? prev : [...prev, client],
+    );
+    if (clientDialogFor !== null) {
+      updateSettlement(clientDialogFor, {
+        client_id: client.id,
+        client_name: client.name,
+      });
+    }
+    setClientDialogFor(null);
+  };
+
+  const uploadOriginal = async (
+    receivedId: string,
+    files: File[],
+  ): Promise<boolean> => {
+    if (!files?.length) return false;
+    try {
+      const fd = new FormData();
+      for (const f of files) fd.append("files", f);
+      const upRes = await fetch(
+        `/api/received-invoices/${receivedId}/upload-pdf`,
+        { method: "POST", body: fd },
+      );
+      return upRes.ok;
+    } catch {
+      return false;
+    }
+  };
+
   const saveApproved = async () => {
-    const approvedPairs = results
+    const approvedEntries = results
       .map((r, i) => ({ r, i }))
       .filter(({ r }) => r.status === "done" && r.approved);
-    if (approvedPairs.length === 0) {
-      toast.error("Nejsou žádné schválené faktury k importu");
+    if (approvedEntries.length === 0) {
+      toast.error("Nejsou žádné schválené doklady k importu");
       return;
     }
     setSaving(true);
+    const savedIdx = new Set<number>();
+    let createdInvoices = 0;
+    let createdSettlements = 0;
+    let filesUploaded = 0;
+
     try {
-      const approved = approvedPairs.map((p) => p.r);
-      const payload = {
-        source_file_count: approved.reduce((s, r) => s + (r.pageCount || 1), 0),
-        invoices: approved.map((r) => ({
-          filename: r.filename,
-          supplier: {
-            name: r.data!.supplier.name,
-            ico: r.data!.supplier.ico || null,
-            dic: r.data!.supplier.dic || null,
-            address_street: r.data!.supplier.address_street || null,
-            address_city: r.data!.supplier.address_city || null,
-            address_zip: r.data!.supplier.address_zip || null,
-          },
-          supplier_invoice_number: r.data!.supplier_invoice_number || null,
-          issued_at: r.data!.issued_at,
-          due_date: r.data!.due_date || null,
-          payment_method: r.data!.payment_method,
-          category: r.data!.category,
-          description: r.data!.description || "Bez popisu",
-          amount_no_vat: r.data!.amount_no_vat,
-          amount_vat: r.data!.amount_vat,
-          amount_total: r.data!.amount_total,
-          tokens_input: r.usage?.input_tokens,
-          tokens_output: r.usage?.output_tokens,
-        })),
-      };
-      const res = await fetch("/api/import-received/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || "Uložení selhalo");
+      // 1) Běžné přijaté faktury — jedním requestem, přesně jako dnes.
+      const regular = approvedEntries.filter(({ r }) => r.docType === "invoice");
+      if (regular.length > 0) {
+        const approved = regular.map((p) => p.r);
+        const payload = {
+          source_file_count: approved.reduce(
+            (s, r) => s + (r.pageCount || 1),
+            0,
+          ),
+          invoices: approved.map((r) => ({
+            filename: r.filename,
+            supplier: {
+              name: r.data!.supplier.name,
+              ico: r.data!.supplier.ico || null,
+              dic: r.data!.supplier.dic || null,
+              address_street: r.data!.supplier.address_street || null,
+              address_city: r.data!.supplier.address_city || null,
+              address_zip: r.data!.supplier.address_zip || null,
+            },
+            supplier_invoice_number: r.data!.supplier_invoice_number || null,
+            issued_at: r.data!.issued_at,
+            due_date: r.data!.due_date || null,
+            payment_method: r.data!.payment_method,
+            category: r.data!.category,
+            description: r.data!.description || "Bez popisu",
+            amount_no_vat: r.data!.amount_no_vat,
+            amount_vat: r.data!.amount_vat,
+            amount_total: r.data!.amount_total,
+            tokens_input: r.usage?.input_tokens,
+            tokens_output: r.usage?.output_tokens,
+          })),
+        };
+        const res = await fetch("/api/import-received/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Uložení selhalo");
+
+        createdInvoices = json.created ?? 0;
+        const createdItems: Array<{ index: number; id: string }> =
+          json.createdItems ?? [];
+        const uploadLimit = pLimit(3);
+        await Promise.all(
+          createdItems.map((item) =>
+            uploadLimit(async () => {
+              const source = approved[item.index];
+              if (await uploadOriginal(item.id, source?.files ?? []))
+                filesUploaded += 1;
+            }),
+          ),
+        );
+        const failedRegular = new Set(
+          (json.errors ?? []).map((e: { index: number }) => e.index),
+        );
+        regular.forEach((entry, k) => {
+          if (!failedRegular.has(k)) savedIdx.add(entry.i);
+        });
+        for (const e of json.errors ?? []) toast.error(e.message);
       }
 
-      // Upload originálu (PDF nebo všechny strany fotek) k vytvořeným fakturám (best-effort)
-      const createdItems: Array<{ index: number; id: string }> =
-        json.createdItems ?? [];
-      let filesUploaded = 0;
-      const uploadLimit = pLimit(3);
-      await Promise.all(
-        createdItems.map((item) =>
-          uploadLimit(async () => {
-            const source = approved[item.index];
-            if (!source?.files?.length) return;
-            try {
-              const fd = new FormData();
-              for (const f of source.files) fd.append("files", f);
-              const upRes = await fetch(
-                `/api/received-invoices/${item.id}/upload-pdf`,
-                { method: "POST", body: fd },
-              );
-              if (upRes.ok) filesUploaded += 1;
-            } catch {
-              // ignore — faktura je uložená, jen příloha chybí
-            }
-          }),
-        ),
+      // 2) Vyúčtování — každé zvlášť přes RPC endpoint (atomická dvojice).
+      const settlements = approvedEntries.filter(
+        ({ r }) => r.docType !== "invoice",
       );
+      for (const { r, i } of settlements) {
+        const s = r.settlement!;
+        const res = await fetch("/api/settlements", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: s.provider,
+            statement_number: s.statement_number,
+            statement_date: s.statement_date,
+            gross_amount: s.gross,
+            fee_amount: s.fee,
+            net_amount: s.net,
+            client_id: s.client_id,
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (res.status === 409) {
+            toast.error(json.error ?? "Výpis je už zaevidovaný", {
+              description: "Tenhle výpis už v systému existuje.",
+            });
+          } else {
+            toast.error(json.error ?? "Vyúčtování se nepodařilo uložit");
+          }
+          continue;
+        }
+        createdSettlements += 1;
+        if (json.received_id && (await uploadOriginal(json.received_id, r.files)))
+          filesUploaded += 1;
+        savedIdx.add(i);
+      }
 
-      if (json.created > 0) {
+      if (createdInvoices > 0 || createdSettlements > 0) {
         toast.success(
-          `Vytvořeno ${json.created} přijatých faktur${json.failed > 0 ? ` (${json.failed} selhalo)` : ""}${filesUploaded > 0 ? `, ${filesUploaded}× příloha uložena` : ""}`,
+          `Importováno: ${createdInvoices} přijatých faktur, ${createdSettlements} vyúčtování${filesUploaded > 0 ? `, ${filesUploaded}× příloha uložena` : ""}`,
         );
       }
-      if (json.failed > 0) {
-        for (const e of json.errors ?? []) {
-          toast.error(e.message);
-        }
-      }
 
-      // Odeber úspěšně uložené řádky (ponech ty, co selhaly)
-      const approvedIndices = approvedPairs.map((p) => p.i);
-      const failedResultIndices = new Set(
-        (json.errors ?? []).map(
-          (e: { index: number }) => approvedIndices[e.index],
-        ),
-      );
-      setResults((prev) =>
-        prev.filter(
-          (_, i) => failedResultIndices.has(i) || !approvedIndices.includes(i),
-        ),
-      );
+      setResults((prev) => prev.filter((_, i) => !savedIdx.has(i)));
       setHistoryKey((k) => k + 1);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Uložení selhalo");
@@ -454,6 +588,8 @@ export function ImportReceivedClient({
           Nahraj PDF nebo fotky faktur od dodavatelů (REDDO, Cotton, Tiskárna
           Slon…), i focené mobilem včetně HEIC z iPhonu. AI z nich vytáhne data,
           ty je zkontroluješ a uloží se jako přijaté faktury včetně originálu.
+          Vyúčtování Shoptet Pay a Zásilkovny AI rozpozná sama a udělá z nich
+          dvojici náklad + tržba.
         </p>
       </div>
 
@@ -497,7 +633,20 @@ export function ImportReceivedClient({
             <CardTitle>Výsledky ({results.length})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {results.map((r, idx) => (
+            {results.map((r, idx) =>
+              r.docType !== "invoice" && r.status === "done" && r.settlement ? (
+                <SettlementImportCard
+                  key={idx}
+                  filename={r.filename}
+                  settlement={r.settlement}
+                  approved={r.approved}
+                  clients={clients}
+                  notes={r.notes}
+                  onChange={(patch) => updateSettlement(idx, patch)}
+                  onToggleApproved={() => toggleApproved(idx)}
+                  onNewClient={() => setClientDialogFor(idx)}
+                />
+              ) : (
               <div
                 key={idx}
                 className={cn(
@@ -585,7 +734,8 @@ export function ImportReceivedClient({
                   </p>
                 )}
               </div>
-            ))}
+              ),
+            )}
           </CardContent>
         </Card>
       )}
@@ -1006,6 +1156,15 @@ export function ImportReceivedClient({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Inline založení odběratele pro tržbu z vyúčtování */}
+      <ClientCreateDialog
+        open={clientDialogFor !== null}
+        onOpenChange={(o) => {
+          if (!o) setClientDialogFor(null);
+        }}
+        onCreated={handleSettlementClientCreated}
+      />
     </div>
   );
 }

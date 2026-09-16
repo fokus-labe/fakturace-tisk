@@ -7,6 +7,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ReceivedInvoiceStatusBadge } from "@/components/received-invoice/received-invoice-status-badge";
 import { EtnExportBadge, etnExportInfo } from "@/components/etn/etn-export-badge";
+import {
+  SettlementBadge,
+  settlementInfo,
+} from "@/components/settlements/settlement-badge";
 import { ReceivedInvoiceStepper } from "@/components/received-invoice/received-invoice-stepper";
 import { AttachmentViewer } from "@/components/received-invoice/attachment-viewer";
 import { ReceivedInvoiceActions } from "./received-invoice-actions";
@@ -28,13 +32,25 @@ export default async function ReceivedInvoiceDetailPage({ params }: PageProps) {
   const { data: invoice } = await supabase
     .from("received_invoices")
     .select(
-      "*, supplier:suppliers(*), etn_export:etn_exports(id, period_start, period_end)",
+      "*, supplier:suppliers(*), etn_export:etn_exports(id, period_start, period_end), settlement:settlements(id, provider, statement_number)",
     )
     .eq("id", id)
     .single();
   if (!invoice) notFound();
 
   const etnExport = etnExportInfo(invoice.etn_export);
+  const settlement = settlementInfo(invoice.settlement);
+
+  // Protistrana dvojice — vydaná faktura (tržba) téhož vyúčtování.
+  let settlementCounterpartId: string | null = null;
+  if (settlement) {
+    const { data: counterpart } = await supabase
+      .from("invoice_requests")
+      .select("id")
+      .eq("settlement_id", settlement.id)
+      .maybeSingle();
+    settlementCounterpartId = counterpart?.id ?? null;
+  }
 
   return (
     <div className="space-y-6">
@@ -58,6 +74,19 @@ export default async function ReceivedInvoiceDetailPage({ params }: PageProps) {
                 <EtnExportBadge export={etnExport} asLink />
               ) : null}
             </div>
+            {settlement ? (
+              <div className="mt-2">
+                <SettlementBadge
+                  settlement={settlement}
+                  counterpartHref={
+                    settlementCounterpartId
+                      ? `/invoices/${settlementCounterpartId}`
+                      : undefined
+                  }
+                  counterpartLabel="příslušná tržba"
+                />
+              </div>
+            ) : null}
             <p className="text-sm text-muted-foreground">
               {invoice.supplier_invoice_number
                 ? `Č. ${invoice.supplier_invoice_number} · `
