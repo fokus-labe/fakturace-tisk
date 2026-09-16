@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/venues/is-admin";
+import { getActiveVenue } from "@/lib/venues/get-user-venues";
 import { formatDate } from "@/lib/utils/format";
 import { ApiKeysClient } from "./api-keys-client";
 
@@ -21,15 +22,29 @@ export const metadata = { title: "API klíče · Fokus tisk" };
 export default async function ApiKeysPage() {
   if (!(await isAdmin())) redirect("/settings");
 
+  const activeVenue = await getActiveVenue();
   const supabase = await createClient();
   const { data } = await supabase
     .from("api_keys")
     .select(
-      "id, name, key_prefix, scopes, created_at, last_used_at, revoked_at",
+      "id, name, key_prefix, scopes, created_at, last_used_at, revoked_at, venue:venues(name)",
     )
     .order("created_at", { ascending: false });
 
-  const keys = data ?? [];
+  const keys = (data ?? []) as unknown as Array<{
+    id: string;
+    name: string;
+    key_prefix: string;
+    created_at: string;
+    last_used_at: string | null;
+    revoked_at: string | null;
+    venue: { name: string } | { name: string }[] | null;
+  }>;
+
+  function venueName(venue: (typeof keys)[number]["venue"]): string {
+    const v = Array.isArray(venue) ? venue[0] : venue;
+    return v?.name ?? "—";
+  }
 
   return (
     <div className="space-y-6">
@@ -44,10 +59,11 @@ export default async function ApiKeysPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">API klíče</h1>
           <p className="text-sm text-muted-foreground">
-            Klíče pro vytváření faktur z externích systémů (e-shopy).
+            Klíče pro vytváření faktur z externích systémů (e-shopy). Nový klíč
+            patří aktivní provozovně.
           </p>
         </div>
-        <ApiKeysClient />
+        <ApiKeysClient activeVenueName={activeVenue?.name ?? null} />
       </div>
 
       <Card>
@@ -61,6 +77,7 @@ export default async function ApiKeysPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Jméno</TableHead>
+                  <TableHead>Provozovna</TableHead>
                   <TableHead>Prefix</TableHead>
                   <TableHead>Naposledy použit</TableHead>
                   <TableHead>Vytvořen</TableHead>
@@ -71,6 +88,7 @@ export default async function ApiKeysPage() {
                 {keys.map((k) => (
                   <TableRow key={k.id}>
                     <TableCell className="font-medium">{k.name}</TableCell>
+                    <TableCell>{venueName(k.venue)}</TableCell>
                     <TableCell className="font-mono text-xs">
                       {k.key_prefix}…
                     </TableCell>

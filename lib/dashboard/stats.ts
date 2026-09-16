@@ -55,7 +55,7 @@ const round2 = (x: number) => Math.round(x * 100) / 100;
 
 export async function getDashboardStats(
   supabase: SupabaseClient,
-  venueId?: string,
+  venueId: string,
 ): Promise<DashboardStats> {
   const now = new Date();
   const thisMonthStart = startOfMonthISO(now);
@@ -71,36 +71,35 @@ export async function getDashboardStats(
   const yearStart = `${now.getFullYear()}-01-01`;
   const yearEnd = `${now.getFullYear()}-12-31`;
 
-  let receivedQuery = supabase
+  const receivedQuery = supabase
     .from("received_invoices")
     .select(
       "id, issued_at, amount_total, amount_no_vat, status, supplier:suppliers(id, name)",
     )
+    .eq("venue_id", venueId)
     .gte("issued_at", cashflowStart)
     .neq("status", "cancelled");
-  if (venueId) receivedQuery = receivedQuery.eq("venue_id", venueId);
 
-  let issuedQuery = supabase
+  const issuedQuery = supabase
     .from("invoice_requests")
     .select(
       "id, issued_at, invoice_issued_at, status, client:clients(id, name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)",
     )
+    .eq("venue_id", venueId)
     .gte("issued_at", cashflowStart)
     .not("status", "in", '("cancelled","draft")');
-  if (venueId) issuedQuery = issuedQuery.eq("venue_id", venueId);
 
-  let pendingReceivedQuery = supabase
+  const pendingReceivedQuery = supabase
     .from("received_invoices")
     .select("id, amount_total, status")
+    .eq("venue_id", venueId)
     .eq("status", "entered");
-  if (venueId) pendingReceivedQuery = pendingReceivedQuery.eq("venue_id", venueId);
 
-  let pendingAtAccountantQuery = supabase
+  const pendingAtAccountantQuery = supabase
     .from("invoice_requests")
     .select("id, status")
+    .eq("venue_id", venueId)
     .eq("status", "sent_to_accountant");
-  if (venueId)
-    pendingAtAccountantQuery = pendingAtAccountantQuery.eq("venue_id", venueId);
 
   const [
     { data: received },

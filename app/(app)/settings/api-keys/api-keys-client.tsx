@@ -16,7 +16,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-export function ApiKeysClient() {
+export function ApiKeysClient({
+  activeVenueName,
+}: {
+  activeVenueName: string | null;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -92,6 +96,10 @@ export function ApiKeysClient() {
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              Klíč bude patřit provozovně{" "}
+              <strong>{activeVenueName ?? "—"}</strong>.
+            </p>
           </div>
         )}
 

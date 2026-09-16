@@ -114,6 +114,7 @@ export async function POST(req: NextRequest) {
         const { data: existing } = await supabase
           .from("suppliers")
           .select("id")
+          .eq("venue_id", venue.id)
           .eq("ico", ico)
           .maybeSingle();
         if (existing) {
@@ -142,6 +143,7 @@ export async function POST(req: NextRequest) {
         const { data: existing } = await supabase
           .from("suppliers")
           .select("id")
+          .eq("venue_id", venue.id)
           .eq("name", inv.supplier.name)
           .maybeSingle();
         if (existing) {

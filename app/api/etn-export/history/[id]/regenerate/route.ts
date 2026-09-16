@@ -27,6 +27,17 @@ export async function POST(
   if (fetchErr || !exp)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  // Provozovnu bereme z uloženého řádku — nikdy tichý fallback na fokus-tisk,
+  // jinak by regenerovaný XLSX agregoval data napříč provozovnami.
+  if (!exp.venue_id)
+    return NextResponse.json(
+      {
+        error:
+          "Historický export nemá přiřazenou provozovnu, nelze ho regenerovat. Vygeneruj export znovu z aktuálních dat.",
+      },
+      { status: 400 },
+    );
+
   // Pokud existuje storage_path, jen vygenerujeme nový signed URL
   if (exp.storage_path) {
     const { data: head } = await supabase.storage
@@ -41,13 +52,26 @@ export async function POST(
     }
   }
 
-  // Jinak vygenerujeme XLSX znovu z aktuálních dat
+  // Jinak vygenerujeme XLSX znovu z aktuálních dat — vždy scoped na provozovnu
+  // uloženou u exportu.
+  const { data: venue, error: venueErr } = await supabase
+    .from("venues")
+    .select("id, slug, name")
+    .eq("id", exp.venue_id)
+    .maybeSingle();
+  if (venueErr || !venue)
+    return NextResponse.json(
+      { error: "Provozovnu exportu se nepodařilo načíst" },
+      { status: 400 },
+    );
+
   let data;
   try {
     data = await fetchEtnPeriodData(
       supabase,
       exp.period_start,
       exp.period_end,
+      venue.id,
     );
   } catch (e) {
     return NextResponse.json(
@@ -61,9 +85,12 @@ export async function POST(
     periodEnd: new Date(exp.period_end),
     receivedInvoices: data.receivedInvoices,
     issuedInvoices: data.issuedInvoices,
+    venueName: venue.name,
   });
 
-  const storagePath = `${Date.now()}_${exp.filename}`;
+  // Filename sestavujeme stejně jako původní POST export.
+  const filename = `ETN_${venue.slug}_${exp.period_start}_${exp.period_end}.xlsx`;
+  const storagePath = `${Date.now()}_${filename}`;
   const { error: uploadError } = await supabase.storage
     .from("etn-exports")
     .upload(storagePath, new Uint8Array(buffer), {
@@ -83,7 +110,11 @@ export async function POST(
 
   await supabase
     .from("etn_exports")
-    .update({ xlsx_url: signed?.signedUrl ?? null, storage_path: storagePath })
+    .update({
+      xlsx_url: signed?.signedUrl ?? null,
+      storage_path: storagePath,
+      filename,
+    })
     .eq("id", id);
 
   return NextResponse.json({ xlsx_url: signed?.signedUrl ?? null });
