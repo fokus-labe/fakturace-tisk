@@ -154,7 +154,7 @@ export function ReceivedInvoiceFilters({
     (initialStatus ?? "") !== "" ||
     (initialCategory ?? "") !== "" ||
     (initialQ ?? "") !== "" ||
-    initialPreset !== "this_year" ||
+    initialPreset !== "this_and_last_month" ||
     initialSortBy !== "issued_at" ||
     initialSortDir !== "asc";
 

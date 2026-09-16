@@ -17,6 +17,7 @@ const PRESET_LABELS: Record<DatePreset, string> = {
   all: "Vše",
   this_month: "Tento měsíc",
   last_month: "Minulý měsíc",
+  this_and_last_month: "Tento a minulý měsíc",
   this_year: "Tento rok",
   last_year: "Minulý rok",
   custom: "Vlastní rozsah",
@@ -60,6 +61,9 @@ export function DateRangeFilter({
           <SelectContent>
             <SelectItem value="this_month">Tento měsíc</SelectItem>
             <SelectItem value="last_month">Minulý měsíc</SelectItem>
+            <SelectItem value="this_and_last_month">
+              Tento a minulý měsíc
+            </SelectItem>
             <SelectItem value="this_year">Tento rok</SelectItem>
             <SelectItem value="last_year">Minulý rok</SelectItem>
             <SelectItem value="custom">Vlastní rozsah</SelectItem>

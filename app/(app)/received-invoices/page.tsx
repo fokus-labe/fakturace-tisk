@@ -16,6 +16,7 @@ import { getActiveVenue } from "@/lib/venues/get-user-venues";
 import { VenueBreadcrumb } from "@/components/venue/venue-breadcrumb";
 import { formatCZK, formatDate, formatDateInput } from "@/lib/utils/format";
 import { ReceivedInvoiceStatusBadge } from "@/components/received-invoice/received-invoice-status-badge";
+import { EtnExportBadge, etnExportInfo } from "@/components/etn/etn-export-badge";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { SortSelect } from "@/components/ui/sort-select";
 import { ReceivedInvoiceFilters } from "./received-invoice-filters";
@@ -45,10 +46,14 @@ const DATE_PRESETS: DatePreset[] = [
   "all",
   "this_month",
   "last_month",
+  "this_and_last_month",
   "this_year",
   "last_year",
   "custom",
 ];
+
+// Výchozí pohled přijatých faktur: tento a minulý měsíc (přechod přes hranu měsíce).
+const DEFAULT_DATE_PRESET: DatePreset = "this_and_last_month";
 
 const STATUSES: ReceivedInvoiceStatus[] = [
   "draft",
@@ -110,7 +115,7 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
   const preset: DatePreset =
     sp.preset && (DATE_PRESETS as string[]).includes(sp.preset)
       ? (sp.preset as DatePreset)
-      : "this_year";
+      : DEFAULT_DATE_PRESET;
   const presetRange = preset === "custom" ? null : presetToRange(preset);
   const from = presetRange ? presetRange.from : (sp.from ?? "");
   const to = presetRange ? presetRange.to : (sp.to ?? "");
@@ -125,7 +130,9 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
   const venue = await getActiveVenue();
   let query = supabase
     .from("received_invoices")
-    .select("*, supplier:suppliers(id, name)")
+    .select(
+      "*, supplier:suppliers(id, name), etn_export:etn_exports(id, period_start, period_end)",
+    )
     .limit(300);
   if (venue) query = query.eq("venue_id", venue.id);
   if (status) query = query.eq("status", status);
@@ -241,7 +248,12 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
                       {inv.description}
                     </p>
                   </div>
-                  <ReceivedInvoiceStatusBadge status={inv.status} />
+                  <div className="flex flex-col items-end gap-1">
+                    <ReceivedInvoiceStatusBadge status={inv.status} />
+                    {etnExportInfo(inv.etn_export) ? (
+                      <EtnExportBadge export={etnExportInfo(inv.etn_export)!} />
+                    ) : null}
+                  </div>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-sm">
                   <div className="flex flex-col text-xs">
@@ -364,7 +376,14 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
                       }
                     </TableCell>
                     <TableCell>
-                      <ReceivedInvoiceStatusBadge status={inv.status} />
+                      <div className="flex flex-col items-start gap-1">
+                        <ReceivedInvoiceStatusBadge status={inv.status} />
+                        {etnExportInfo(inv.etn_export) ? (
+                          <EtnExportBadge
+                            export={etnExportInfo(inv.etn_export)!}
+                          />
+                        ) : null}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

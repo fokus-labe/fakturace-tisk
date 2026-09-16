@@ -17,6 +17,7 @@ import { VenueBreadcrumb } from "@/components/venue/venue-breadcrumb";
 import { calculateInvoiceTotals } from "@/lib/utils/vat";
 import { formatCZK, formatDate } from "@/lib/utils/format";
 import { InvoiceStatusBadge } from "@/components/invoice/invoice-status-badge";
+import { EtnExportBadge, etnExportInfo } from "@/components/etn/etn-export-badge";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { SortSelect } from "@/components/ui/sort-select";
 import { InvoiceFilters } from "./invoice-filters";
@@ -104,7 +105,9 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
   const venue = await getActiveVenue();
   let query = supabase
     .from("invoice_requests")
-    .select("*, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)")
+    .select(
+      "*, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate), etn_export:etn_exports(id, period_start, period_end)",
+    )
     .limit(200);
 
   if (venue) query = query.eq("venue_id", venue.id);
@@ -229,7 +232,12 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
                       VS {inv.variable_symbol ?? "—"}
                     </p>
                   </div>
-                  <InvoiceStatusBadge status={inv.status} />
+                  <div className="flex flex-col items-end gap-1">
+                    <InvoiceStatusBadge status={inv.status} />
+                    {etnExportInfo(inv.etn_export) ? (
+                      <EtnExportBadge export={etnExportInfo(inv.etn_export)!} />
+                    ) : null}
+                  </div>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-sm">
                   <span className="text-muted-foreground tabular-nums">
@@ -307,7 +315,14 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
                         {formatCZK(totals.withVat)}
                       </TableCell>
                       <TableCell>
-                        <InvoiceStatusBadge status={inv.status} />
+                        <div className="flex flex-col items-start gap-1">
+                          <InvoiceStatusBadge status={inv.status} />
+                          {etnExportInfo(inv.etn_export) ? (
+                            <EtnExportBadge
+                              export={etnExportInfo(inv.etn_export)!}
+                            />
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

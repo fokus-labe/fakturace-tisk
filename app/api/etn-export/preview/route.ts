@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fetchEtnPeriodData } from "@/lib/etn/fetch-period-data";
+import { fetchEtnCandidates } from "@/lib/etn/fetch-selection-data";
+import { ETN_MAX_ISSUED, ETN_MAX_RECEIVED } from "@/lib/etn/limits";
 import { getActiveVenue } from "@/lib/venues/get-user-venues";
 
 export const runtime = "nodejs";
@@ -30,24 +31,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No venue access" }, { status: 403 });
 
   try {
-    const data = await fetchEtnPeriodData(
+    const data = await fetchEtnCandidates(
       supabase,
+      venue.id,
       periodStart,
       periodEnd,
-      venue.id,
     );
     return NextResponse.json({
       periodStart,
       periodEnd,
-      receivedInvoices: data.receivedInvoices.map((r) => ({
-        ...r,
-        issued_at: r.issued_at.toISOString().slice(0, 10),
-      })),
-      issuedInvoices: data.issuedInvoices.map((r) => ({
-        ...r,
-        issued_at: r.issued_at.toISOString().slice(0, 10),
-      })),
-      warnings: data.warnings,
+      issued: data.issued,
+      received: data.received,
+      limits: { maxReceived: ETN_MAX_RECEIVED, maxIssued: ETN_MAX_ISSUED },
     });
   } catch (e) {
     return NextResponse.json(

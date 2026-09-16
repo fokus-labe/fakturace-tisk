@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ReceivedInvoiceStatusBadge } from "@/components/received-invoice/received-invoice-status-badge";
+import { EtnExportBadge, etnExportInfo } from "@/components/etn/etn-export-badge";
 import { ReceivedInvoiceStepper } from "@/components/received-invoice/received-invoice-stepper";
 import { AttachmentViewer } from "@/components/received-invoice/attachment-viewer";
 import { ReceivedInvoiceActions } from "./received-invoice-actions";
@@ -26,10 +27,14 @@ export default async function ReceivedInvoiceDetailPage({ params }: PageProps) {
   const supabase = await createClient();
   const { data: invoice } = await supabase
     .from("received_invoices")
-    .select("*, supplier:suppliers(*)")
+    .select(
+      "*, supplier:suppliers(*), etn_export:etn_exports(id, period_start, period_end)",
+    )
     .eq("id", id)
     .single();
   if (!invoice) notFound();
+
+  const etnExport = etnExportInfo(invoice.etn_export);
 
   return (
     <div className="space-y-6">
@@ -49,6 +54,9 @@ export default async function ReceivedInvoiceDetailPage({ params }: PageProps) {
                 {invoice.supplier?.name ?? "—"}
               </h1>
               <ReceivedInvoiceStatusBadge status={invoice.status} />
+              {etnExport ? (
+                <EtnExportBadge export={etnExport} asLink />
+              ) : null}
             </div>
             <p className="text-sm text-muted-foreground">
               {invoice.supplier_invoice_number
