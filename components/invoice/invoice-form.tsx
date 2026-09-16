@@ -80,6 +80,13 @@ export function InvoiceForm({
   const [clientList, setClientList] = useState<ClientLite[]>(clients);
   const [clientDialogOpen, setClientDialogOpen] = useState(false);
 
+  // Výchozí datumy počítáme jednou (lazy useState) — new Date()/Date.now() jsou
+  // nečisté a nesmí se volat přímo v renderu.
+  const [defaultDates] = useState(() => ({
+    issued_at: formatDateInput(new Date()),
+    due_date: formatDateInput(new Date(Date.now() + 14 * 24 * 3600 * 1000)),
+  }));
+
   const form = useForm<InvoiceFormInput, unknown, InvoiceFormOutput>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: initial
@@ -95,11 +102,9 @@ export function InvoiceForm({
         }
       : {
           client_id: clients[0]?.id ?? "",
-          issued_at: formatDateInput(new Date()),
+          issued_at: defaultDates.issued_at,
           payment_method: "fakturace",
-          due_date: formatDateInput(
-            new Date(Date.now() + 14 * 24 * 3600 * 1000),
-          ),
+          due_date: defaultDates.due_date,
           short_description: "",
           items: [
             { description: "", quantity: 1, unit_price_no_vat: 0, vat_rate: 21 },

@@ -57,7 +57,19 @@ Migrace v `supabase/migrations/0XXX_*.sql` se NESPOUŠTÍ automaticky. Po dokon�
 - Commit + push se provede normálně (migrace ide do gitu)
 - Uživatel pak migraci spustí v Supabase manuálně
 
+**Pořadí u aditivních migrací (sloupec/tabulka/index navíc):** spusť je na 
+PRODUKCI **před** mergem PR. Merge/push do `main` nasazuje produkci okamžitě 
+(~2 min přes Vercel), takže kdyby migrace na produkci nebyla, nasazený kód by 
+hledal sloupec/tabulku, která tam ještě není, a spadl by. Správné pořadí: 
+staging → ověřit → **produkce → teprve pak merge**.
+
 ## Lokální test před commitem
 
 Ideálně před commitem spusť `npm run build` — pokud projde, můžeš commitovat.
 Pokud build selže, NE-commituj a nahlas chybu uživateli.
+
+## Poznámky k projektu
+
+- **Graf cashflow na dashboardu** (`components/dashboard/cashflow-chart.tsx`) je 
+  vlastní SVG komponenta — **recharts se nepoužívá** a není v závislostech (dřívější 
+  poznámky, že „recharts byl odstraněn", sedí: v projektu žádný recharts není).

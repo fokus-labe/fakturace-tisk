@@ -1,3 +1,9 @@
+> ⚠ **ZASTARALÉ — poznámka z 16. 9. 2026.** Tento report je ze Sezení G a popisuje
+> stav aplikace **před migrací 0007** (multi-tenant foundation). Od té doby neplatí
+> zejména: počet API rout (dnes je jich 32, ne 20), report nezná provozovny/venues
+> (multi-tenant), OCR import vydaných ani přijatých faktur, ani import vyúčtování
+> (Shoptet Pay / Zásilkovna). Ber ho jako historický snímek, ne jako aktuální stav.
+
 # Audit Report — Sezení G
 
 *26. května 2026*
