@@ -6,6 +6,7 @@ import {
   venueToIssuer,
   type IssuerData,
 } from "@/lib/venues/venue-issuer";
+import { buildPodkladFilename } from "@/lib/utils/podklad-filename";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -33,6 +34,15 @@ export async function GET(
       { status: 404 },
     );
 
+  // Čitelný název pro stažení: podklad-{odberatel}-{datum vystaveni}.pdf.
+  // Uložená cesta ve Storage se nemění (invoice-pdfs/{uuid}.pdf), mění se jen
+  // název nabízený ke stažení. Fallback na uuid, kdyby název klienta byl prázdný.
+  const downloadFilename = buildPodkladFilename({
+    clientName: data.client?.name,
+    issuedAt: data.issued_at,
+    fallbackId: id,
+  });
+
   if (data.pdf_url) {
     const service = createServiceClient();
     const path = data.pdf_url.replace(/^invoice-pdfs\//, "");
@@ -44,7 +54,7 @@ export async function GET(
       return new NextResponse(new Uint8Array(buf), {
         headers: {
           "Content-Type": "application/pdf",
-          "Content-Disposition": `inline; filename="podklad-${data.variable_symbol ?? id}.pdf"`,
+          "Content-Disposition": `inline; filename="${downloadFilename}"`,
         },
       });
     }
@@ -79,7 +89,7 @@ export async function GET(
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="podklad-${data.variable_symbol ?? id}.pdf"`,
+      "Content-Disposition": `inline; filename="${downloadFilename}"`,
     },
   });
 }

@@ -20,7 +20,10 @@ export const invoiceFormSchema = z.object({
     .array(
       z.object({
         description: z.string().min(1, "Popis je povinný"),
-        quantity: z.coerce.number().positive("Množství musí být kladné"),
+        quantity: z.coerce
+          .number()
+          .int("Množství musí být celé číslo")
+          .positive("Množství musí být kladné"),
         unit_price_no_vat: z.coerce.number().min(0, "Cena nesmí být záporná"),
         vat_rate: z.coerce.number().min(0).max(100),
       }),

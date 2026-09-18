@@ -22,6 +22,7 @@ export const invoiceItemSchema = z.object({
   description: z.string().trim().min(1, "Popis je povinný").max(500),
   quantity: z.coerce
     .number()
+    .int("Množství musí být celé číslo")
     .positive("Množství musí být kladné")
     .max(999999, "Množství je příliš velké"),
   unit_price_no_vat: z.coerce
