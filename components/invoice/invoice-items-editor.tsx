@@ -1,16 +1,63 @@
 "use client";
 
+import { forwardRef } from "react";
 import { Trash2, Plus } from "lucide-react";
 import {
   useFieldArray,
   type Control,
   type UseFormRegister,
+  type UseFormRegisterReturn,
   type FieldErrors,
 } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { InvoiceFormInput } from "./invoice-form-schema";
+
+// Klávesy, které by do množství vnesly desetinnou část nebo znaménko — množství
+// smí být jen celé kladné číslo, takže je blokujeme už při psaní.
+const DECIMAL_KEYS = [".", ",", "e", "E", "+", "-"];
+
+type QuantityInputProps = Pick<UseFormRegisterReturn, "name" | "onBlur"> & {
+  onChange: UseFormRegisterReturn["onChange"];
+};
+
+/**
+ * Vstup množství: krok 1, minimum 1 a tvrdé zamezení desetinné části — jak při
+ * psaní (blokované klávesy), tak při vložení přes schránku (paste se očistí na
+ * číslice). Server i Zod schéma to navíc vynucují znovu, tohle je jen UX vrstva.
+ */
+const QuantityInput = forwardRef<HTMLInputElement, QuantityInputProps>(
+  function QuantityInput({ onChange, ...rest }, ref) {
+    return (
+      <Input
+        {...rest}
+        ref={ref}
+        type="number"
+        inputMode="numeric"
+        step={1}
+        min={1}
+        className="text-right"
+        onChange={onChange}
+        onKeyDown={(e) => {
+          if (DECIMAL_KEYS.includes(e.key)) e.preventDefault();
+        }}
+        onPaste={(e) => {
+          const text = e.clipboardData.getData("text");
+          if (!/\D/.test(text)) return; // čisté číslice — nech projít
+          e.preventDefault();
+          const el = e.currentTarget;
+          el.value = text.replace(/\D/g, "");
+          onChange({
+            ...e,
+            target: el,
+            currentTarget: el,
+          } as unknown as Parameters<UseFormRegisterReturn["onChange"]>[0]);
+        }}
+      />
+    );
+  },
+);
 
 interface Props {
   control: Control<InvoiceFormInput>;
@@ -53,12 +100,14 @@ export function InvoiceItemsEditor({ control, register, errors }: Props) {
           </div>
           <div>
             <Label className="md:hidden text-xs">Množství</Label>
-            <Input
-              type="number"
-              step="0.01"
-              className="text-right"
+            <QuantityInput
               {...register(`items.${idx}.quantity` as const)}
             />
+            {errors.items?.[idx]?.quantity ? (
+              <p className="text-xs text-destructive mt-1">
+                {errors.items[idx]?.quantity?.message}
+              </p>
+            ) : null}
           </div>
           <div>
             <Label className="md:hidden text-xs">J. cena bez DPH</Label>

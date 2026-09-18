@@ -206,7 +206,7 @@ export function InvoiceForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Odběratel</CardTitle>
