@@ -3,24 +3,13 @@ import { Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveVenue } from "@/lib/venues/get-user-venues";
 import { VenueBreadcrumb } from "@/components/venue/venue-breadcrumb";
 import { calculateInvoiceTotals } from "@/lib/utils/vat";
-import { formatCZK, formatDate } from "@/lib/utils/format";
-import { InvoiceStatusBadge } from "@/components/invoice/invoice-status-badge";
-import { EtnExportBadge, etnExportInfo } from "@/components/etn/etn-export-badge";
-import { SortableHeader } from "@/components/ui/sortable-header";
-import { SortSelect } from "@/components/ui/sort-select";
+import { etnExportInfo } from "@/components/etn/etn-export-badge";
 import { InvoiceFilters } from "./invoice-filters";
+import { InvoicesList, type IssuedListRow } from "./invoices-list";
 import { presetToRange, type DatePreset } from "@/lib/date-range/presets";
 import type { InvoiceStatus } from "@/types/invoice";
 
@@ -68,16 +57,6 @@ const ALL_SORT_FIELDS = [...DB_SORT_FIELDS, ...JS_SORT_FIELDS] as string[];
 
 const DEFAULT_SORT_FIELD = "issued_at";
 const DEFAULT_SORT_DIR = "asc";
-
-const MOBILE_SORT_OPTIONS = [
-  { value: "issued_at|asc", label: "Datum (nejstarší)" },
-  { value: "issued_at|desc", label: "Datum (nejnovější)" },
-  { value: "client_name|asc", label: "Klient (A–Z)" },
-  { value: "client_name|desc", label: "Klient (Z–A)" },
-  { value: "total|desc", label: "Částka (od nejvyšší)" },
-  { value: "total|asc", label: "Částka (od nejnižší)" },
-  { value: "due_date|asc", label: "Splatnost (nejstarší)" },
-];
 
 export default async function InvoicesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
@@ -130,7 +109,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
     );
   }
 
-  let invoicesWithTotals = invoices.map((inv) => {
+  let rows: IssuedListRow[] = invoices.map((inv) => {
     const items = (inv.items ?? []).map(
       (it: {
         quantity: number | string;
@@ -143,30 +122,48 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
       }),
     );
     const totals = calculateInvoiceTotals(items);
-    const showPayment =
-      inv.status === "invoice_issued" || inv.status === "archived";
-    return { inv, totals, showPayment };
+    return {
+      id: inv.id,
+      clientName: inv.client?.name ?? "",
+      issuedAt: inv.issued_at,
+      dueDate: inv.due_date,
+      variableSymbol: inv.variable_symbol,
+      paymentMethod: inv.payment_method,
+      showPayment:
+        inv.status === "invoice_issued" || inv.status === "archived",
+      totalWithVat: totals.withVat,
+      status: inv.status as InvoiceStatus,
+      etnExport: etnExportInfo(inv.etn_export),
+    };
   });
 
   if (sortBy === "client_name") {
     const dirMul = sortDir === "asc" ? 1 : -1;
-    invoicesWithTotals = invoicesWithTotals
+    rows = rows
       .slice()
       .sort(
         (a, b) =>
           dirMul *
-          (a.inv.client?.name ?? "").localeCompare(
-            b.inv.client?.name ?? "",
-            "cs",
-            { sensitivity: "base" },
-          ),
+          a.clientName.localeCompare(b.clientName, "cs", {
+            sensitivity: "base",
+          }),
       );
   } else if (sortBy === "total") {
     const dirMul = sortDir === "asc" ? 1 : -1;
-    invoicesWithTotals = invoicesWithTotals
-      .slice()
-      .sort((a, b) => dirMul * (a.totals.withVat - b.totals.withVat));
+    rows = rows.slice().sort((a, b) => dirMul * (a.totalWithVat - b.totalWithVat));
   }
+
+  const selectionKey = [
+    venue?.id ?? "",
+    status ?? "",
+    q ?? "",
+    showArchived ? "1" : "0",
+    preset,
+    from,
+    to,
+    sortBy,
+    sortDir,
+  ].join("|");
 
   return (
     <div className="space-y-6">
@@ -200,7 +197,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
         initialSortDir={sortDir}
       />
 
-      {invoicesWithTotals.length === 0 ? (
+      {rows.length === 0 ? (
         <Card>
           <CardContent>
             <p className="text-sm text-muted-foreground p-6 text-center">
@@ -209,128 +206,7 @@ export default async function InvoicesPage({ searchParams }: PageProps) {
           </CardContent>
         </Card>
       ) : (
-        <>
-          {/* Mobile: sort dropdown + card list */}
-          <div className="md:hidden space-y-2">
-            <SortSelect
-              options={MOBILE_SORT_OPTIONS}
-              defaultField={DEFAULT_SORT_FIELD}
-              defaultDir={DEFAULT_SORT_DIR}
-            />
-            {invoicesWithTotals.map(({ inv, totals }) => (
-              <Link
-                key={inv.id}
-                href={`/invoices/${inv.id}`}
-                className="block rounded-lg border bg-card p-4 transition-colors active:bg-muted/30"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">
-                      {inv.client?.name ?? "—"}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                      VS {inv.variable_symbol ?? "—"}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <InvoiceStatusBadge status={inv.status} />
-                    {etnExportInfo(inv.etn_export) ? (
-                      <EtnExportBadge export={etnExportInfo(inv.etn_export)!} />
-                    ) : null}
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground tabular-nums">
-                    {formatDate(inv.issued_at)}
-                  </span>
-                  <span className="font-mono tabular-nums font-medium">
-                    {formatCZK(totals.withVat)}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-
-          {/* Desktop: table */}
-          <Card className="hidden md:block">
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>
-                      <SortableHeader field="client_name" label="Klient" />
-                    </TableHead>
-                    <TableHead>
-                      <SortableHeader field="issued_at" label="Datum" />
-                    </TableHead>
-                    <TableHead>
-                      <SortableHeader field="due_date" label="Splatnost" />
-                    </TableHead>
-                    <TableHead>
-                      <SortableHeader field="variable_symbol" label="VS" />
-                    </TableHead>
-                    <TableHead>
-                      <SortableHeader
-                        field="payment_method"
-                        label="Způsob platby"
-                      />
-                    </TableHead>
-                    <TableHead className="text-right">
-                      <SortableHeader
-                        field="total"
-                        label="Částka"
-                        align="right"
-                        defaultDir="desc"
-                      />
-                    </TableHead>
-                    <TableHead>
-                      <SortableHeader field="status" label="Status" />
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invoicesWithTotals.map(({ inv, totals, showPayment }) => (
-                    <TableRow key={inv.id}>
-                      <TableCell>
-                        <Link
-                          href={`/invoices/${inv.id}`}
-                          className="hover:underline"
-                        >
-                          {inv.client?.name ?? "—"}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {formatDate(inv.issued_at)}
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {formatDate(inv.due_date)}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {inv.variable_symbol ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {showPayment ? inv.payment_method ?? "—" : "—"}
-                      </TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">
-                        {formatCZK(totals.withVat)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col items-start gap-1">
-                          <InvoiceStatusBadge status={inv.status} />
-                          {etnExportInfo(inv.etn_export) ? (
-                            <EtnExportBadge
-                              export={etnExportInfo(inv.etn_export)!}
-                            />
-                          ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </>
+        <InvoicesList rows={rows} selectionKey={selectionKey} />
       )}
     </div>
   );

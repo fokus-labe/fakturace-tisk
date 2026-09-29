@@ -45,3 +45,14 @@ export const receivedInvoiceUpdateSchema = receivedInvoiceSchema.partial();
 export type ReceivedInvoiceUpdateInput = z.infer<
   typeof receivedInvoiceUpdateSchema
 >;
+
+// Hromadná operace nad více přijatými fakturami. Limit počtu id se kontroluje
+// v route handleru (kvůli srozumitelné chybové hlášce), tady jen tvar vstupu.
+export const receivedInvoiceBulkSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1, "Vyber alespoň jednu fakturu"),
+  action: z.enum(["archive", "mark_paid"]),
+});
+
+export type ReceivedInvoiceBulkInput = z.infer<
+  typeof receivedInvoiceBulkSchema
+>;

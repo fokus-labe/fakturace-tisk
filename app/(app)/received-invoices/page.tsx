@@ -3,27 +3,18 @@ import { Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveVenue } from "@/lib/venues/get-user-venues";
 import { VenueBreadcrumb } from "@/components/venue/venue-breadcrumb";
-import { formatCZK, formatDate, formatDateInput } from "@/lib/utils/format";
-import { ReceivedInvoiceStatusBadge } from "@/components/received-invoice/received-invoice-status-badge";
-import { EtnExportBadge, etnExportInfo } from "@/components/etn/etn-export-badge";
-import { SortableHeader } from "@/components/ui/sortable-header";
-import { SortSelect } from "@/components/ui/sort-select";
+import { formatDateInput } from "@/lib/utils/format";
+import { etnExportInfo } from "@/components/etn/etn-export-badge";
 import { ReceivedInvoiceFilters } from "./received-invoice-filters";
+import {
+  ReceivedInvoicesList,
+  type ReceivedListRow,
+} from "./received-invoices-list";
 import { presetToRange, type DatePreset } from "@/lib/date-range/presets";
 import {
-  RECEIVED_INVOICE_CATEGORY_LABELS,
-  RECEIVED_PAYMENT_METHOD_LABELS,
   type ReceivedInvoiceCategory,
   type ReceivedInvoiceStatus,
   type ReceivedPaymentMethod,
@@ -90,16 +81,6 @@ const ALL_SORT_FIELDS = [...DB_SORT_FIELDS, ...JS_SORT_FIELDS] as string[];
 const DEFAULT_SORT_FIELD = "issued_at";
 const DEFAULT_SORT_DIR = "asc";
 
-const MOBILE_SORT_OPTIONS = [
-  { value: "issued_at|asc", label: "Datum (nejstarší)" },
-  { value: "issued_at|desc", label: "Datum (nejnovější)" },
-  { value: "supplier_name|asc", label: "Dodavatel (A–Z)" },
-  { value: "supplier_name|desc", label: "Dodavatel (Z–A)" },
-  { value: "amount_total|desc", label: "Částka (od nejvyšší)" },
-  { value: "amount_total|asc", label: "Částka (od nejnižší)" },
-  { value: "due_date|asc", label: "Splatnost (nejstarší)" },
-];
-
 export default async function ReceivedInvoicesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const status =
@@ -135,7 +116,10 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
     )
     .limit(300);
   if (venue) query = query.eq("venue_id", venue.id);
+  // Archivované jsou z výchozího pohledu skryté; zobrazí se jen když si uživatel
+  // explicitně vybere status „Archiv" (parametr status v URL přebije default).
   if (status) query = query.eq("status", status);
+  else query = query.neq("status", "archived");
   if (category) query = query.eq("category", category);
   if (from) query = query.gte("issued_at", from);
   if (to) query = query.lte("issued_at", to);
@@ -156,30 +140,53 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
   }
 
   const today = formatDateInput(new Date());
-  let enriched = invoices.map((inv) => {
+  let rows: ReceivedListRow[] = invoices.map((inv) => {
     const overdue =
       !!inv.due_date &&
       inv.due_date < today &&
       inv.status !== "paid" &&
       inv.status !== "archived" &&
       inv.status !== "cancelled";
-    return { inv, overdue };
+    return {
+      id: inv.id,
+      supplierName: inv.supplier?.name ?? "",
+      supplierInvoiceNumber: inv.supplier_invoice_number,
+      issuedAt: inv.issued_at,
+      dueDate: inv.due_date,
+      description: inv.description ?? "",
+      category: inv.category as ReceivedInvoiceCategory,
+      amountTotal: Number(inv.amount_total),
+      paymentMethod: inv.payment_method as ReceivedPaymentMethod,
+      status: inv.status as ReceivedInvoiceStatus,
+      overdue,
+      etnExport: etnExportInfo(inv.etn_export),
+    };
   });
 
   if (sortBy === "supplier_name") {
     const dirMul = sortDir === "asc" ? 1 : -1;
-    enriched = enriched
+    rows = rows
       .slice()
       .sort(
         (a, b) =>
           dirMul *
-          (a.inv.supplier?.name ?? "").localeCompare(
-            b.inv.supplier?.name ?? "",
-            "cs",
-            { sensitivity: "base" },
-          ),
+          a.supplierName.localeCompare(b.supplierName, "cs", {
+            sensitivity: "base",
+          }),
       );
   }
+
+  const selectionKey = [
+    venue?.id ?? "",
+    status ?? "",
+    category ?? "",
+    q ?? "",
+    preset,
+    from,
+    to,
+    sortBy,
+    sortDir,
+  ].join("|");
 
   return (
     <div className="space-y-6">
@@ -213,7 +220,7 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
         initialSortDir={sortDir}
       />
 
-      {enriched.length === 0 ? (
+      {rows.length === 0 ? (
         <Card>
           <CardContent>
             <p className="text-sm text-muted-foreground p-6 text-center">
@@ -222,176 +229,7 @@ export default async function ReceivedInvoicesPage({ searchParams }: PageProps) 
           </CardContent>
         </Card>
       ) : (
-        <>
-          {/* Mobile: sort dropdown + card list */}
-          <div className="md:hidden space-y-2">
-            <SortSelect
-              options={MOBILE_SORT_OPTIONS}
-              defaultField={DEFAULT_SORT_FIELD}
-              defaultDir={DEFAULT_SORT_DIR}
-            />
-            {enriched.map(({ inv, overdue }) => (
-              <Link
-                key={inv.id}
-                href={`/received-invoices/${inv.id}`}
-                className={cn(
-                  "block rounded-lg border bg-card p-4 transition-colors active:bg-muted/30",
-                  overdue && "border-red-300 bg-red-50/60",
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">
-                      {inv.supplier?.name ?? "—"}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      {inv.description}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <ReceivedInvoiceStatusBadge status={inv.status} />
-                    {etnExportInfo(inv.etn_export) ? (
-                      <EtnExportBadge export={etnExportInfo(inv.etn_export)!} />
-                    ) : null}
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-sm">
-                  <div className="flex flex-col text-xs">
-                    <span className="text-muted-foreground tabular-nums">
-                      {formatDate(inv.issued_at)}
-                    </span>
-                    {inv.due_date ? (
-                      <span
-                        className={cn(
-                          "tabular-nums",
-                          overdue
-                            ? "text-red-700 font-medium"
-                            : "text-muted-foreground",
-                        )}
-                      >
-                        splatnost {formatDate(inv.due_date)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <span className="font-mono tabular-nums font-medium">
-                    {formatCZK(Number(inv.amount_total))}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-
-          {/* Desktop: table */}
-          <Card className="hidden md:block">
-            <CardContent className="p-0">
-              <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>
-                    <SortableHeader field="supplier_name" label="Dodavatel" />
-                  </TableHead>
-                  <TableHead>
-                    <SortableHeader
-                      field="supplier_invoice_number"
-                      label="Číslo"
-                    />
-                  </TableHead>
-                  <TableHead>
-                    <SortableHeader field="issued_at" label="Datum" />
-                  </TableHead>
-                  <TableHead>
-                    <SortableHeader field="due_date" label="Splatnost" />
-                  </TableHead>
-                  <TableHead>Popis</TableHead>
-                  <TableHead>
-                    <SortableHeader field="category" label="Kategorie" />
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <SortableHeader
-                      field="amount_total"
-                      label="Částka s DPH"
-                      align="right"
-                      defaultDir="desc"
-                    />
-                  </TableHead>
-                  <TableHead>
-                    <SortableHeader
-                      field="payment_method"
-                      label="Způsob platby"
-                    />
-                  </TableHead>
-                  <TableHead>
-                    <SortableHeader field="status" label="Status" />
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {enriched.map(({ inv, overdue }) => (
-                  <TableRow
-                    key={inv.id}
-                    className={cn(
-                      overdue && "bg-red-50/60 hover:bg-red-50",
-                    )}
-                  >
-                    <TableCell>
-                      <Link
-                        href={`/received-invoices/${inv.id}`}
-                        className="hover:underline"
-                      >
-                        {inv.supplier?.name ?? "—"}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {inv.supplier_invoice_number ?? "—"}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {formatDate(inv.issued_at)}
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        "tabular-nums",
-                        overdue && "text-red-700 font-medium",
-                      )}
-                    >
-                      {formatDate(inv.due_date)}
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {inv.description}
-                    </TableCell>
-                    <TableCell>
-                      {
-                        RECEIVED_INVOICE_CATEGORY_LABELS[
-                          inv.category as ReceivedInvoiceCategory
-                        ]
-                      }
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      {formatCZK(Number(inv.amount_total))}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {
-                        RECEIVED_PAYMENT_METHOD_LABELS[
-                          inv.payment_method as ReceivedPaymentMethod
-                        ]
-                      }
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col items-start gap-1">
-                        <ReceivedInvoiceStatusBadge status={inv.status} />
-                        {etnExportInfo(inv.etn_export) ? (
-                          <EtnExportBadge
-                            export={etnExportInfo(inv.etn_export)!}
-                          />
-                        ) : null}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        </>
+        <ReceivedInvoicesList rows={rows} selectionKey={selectionKey} />
       )}
     </div>
   );

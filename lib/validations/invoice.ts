@@ -92,3 +92,12 @@ export const invoiceEditSchema = z.object({
 });
 
 export type InvoiceEditInput = z.infer<typeof invoiceEditSchema>;
+
+// Hromadná operace nad více vydanými fakturami. Limit počtu id se kontroluje
+// v route handleru (kvůli srozumitelné chybové hlášce), tady jen tvar vstupu.
+export const invoiceBulkSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1, "Vyber alespoň jednu fakturu"),
+  action: z.enum(["archive", "mark_paid"]),
+});
+
+export type InvoiceBulkInput = z.infer<typeof invoiceBulkSchema>;
