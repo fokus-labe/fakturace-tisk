@@ -54,10 +54,20 @@ function inRange(iso: string, start: string, end: string): boolean {
 /**
  * Vrátí kandidáty pro výběr v ETN exportu, rozdělené do dvou skupin:
  *  - "in_period": efektivní datum spadá do [periodStart, periodEnd]
- *  - "earlier_unsubmitted": efektivní datum < periodStart a faktura dosud nikdy
- *    nebyla v žádném exportu (etn_export_id IS NULL)
+ *  - "earlier_unsubmitted": efektivní datum < periodStart, faktura dosud nikdy
+ *    nebyla v žádném exportu (etn_export_id IS NULL) A ZÁROVEŇ je stejně stará
+ *    nebo mladší než hranice historie (viz níže)
  * Faktury už odevzdané (submitted) se vrací jen ze skupiny in_period (s odznakem
  * období), UI je defaultně skryje/odškrtne.
+ *
+ * Hranice historie = nejstarší period_start napříč exporty provozovny. Před
+ * zavedením ETN exportu v aplikaci nebylo kam odevzdávat, takže faktury starší
+ * než tahle hranice nejsou „zapomenuté", jen pocházejí z doby před systémem —
+ * do „dříve neodevzdaných" je nenabízíme (jinak by podruhé odešly účetnímu).
+ * Počítá se per provozovna (každá začne systém používat jindy). Když provozovna
+ * zatím nic neexportovala (hranice = null), skupina „dříve neodevzdané" se
+ * nezobrazí vůbec a první export obsahuje jen zvolené období. Na skupinu
+ * in_period se hranice NEVZTAHUJE — zvolené období se chová beze změny.
  */
 export async function fetchEtnCandidates(
   supabase: SupabaseClient,
@@ -65,8 +75,11 @@ export async function fetchEtnCandidates(
   periodStart: string,
   periodEnd: string,
 ): Promise<EtnCandidates> {
-  const [{ data: issuedRows, error: issuedErr }, { data: receivedRows, error: receivedErr }] =
-    await Promise.all([
+  const [
+    { data: issuedRows, error: issuedErr },
+    { data: receivedRows, error: receivedErr },
+    { data: oldestExport, error: exportErr },
+  ] = await Promise.all([
       supabase
         .from("invoice_requests")
         .select(
@@ -85,10 +98,26 @@ export async function fetchEtnCandidates(
         .neq("status", "cancelled")
         .order("issued_at", { ascending: true })
         .limit(CANDIDATE_LIMIT),
+      supabase
+        .from("etn_exports")
+        .select("period_start")
+        .eq("venue_id", venueId)
+        .order("period_start", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
   if (issuedErr) throw new Error(issuedErr.message);
   if (receivedErr) throw new Error(receivedErr.message);
+  if (exportErr) throw new Error(exportErr.message);
+
+  // Hranice historie provozovny (null = zatím žádný export → žádné „dříve
+  // neodevzdané"). Používá se jen pro skupinu earlier_unsubmitted.
+  const historyBoundary: string | null =
+    (oldestExport as { period_start?: string } | null)?.period_start ?? null;
+
+  const inEarlierWindow = (eff: string): boolean =>
+    historyBoundary !== null && eff >= historyBoundary;
 
   const issued: EtnCandidateRow[] = [];
   for (const row of (issuedRows ?? []) as unknown as Array<
@@ -102,7 +131,12 @@ export async function fetchEtnCandidates(
       id: row.id,
       effective_date: eff,
       label: embeddedName(row.client) || "—",
-      number: row.external_invoice_number ?? row.variable_symbol ?? null,
+      // Tržby z vyúčtování nemají číslo vydané faktury — ukaž číslo výpisu
+      // (short_description, např. „SP 671411127153"), ať jde řádek spárovat
+      // s nákladem už v náhledu. Běžné faktury beze změny.
+      number: row.settlement_id
+        ? (row.short_description ?? null)
+        : (row.external_invoice_number ?? row.variable_symbol ?? null),
       amount_with_vat: mapped.amount_with_vat,
       amount_no_vat: mapped.amount_no_vat,
       payment_method: row.payment_method ?? "fakturace",
@@ -112,7 +146,7 @@ export async function fetchEtnCandidates(
     };
     if (inRange(eff, periodStart, periodEnd)) {
       issued.push({ ...base, group: "in_period" });
-    } else if (eff < periodStart && !submitted) {
+    } else if (eff < periodStart && !submitted && inEarlierWindow(eff)) {
       issued.push({ ...base, group: "earlier_unsubmitted" });
     }
   }
@@ -142,10 +176,18 @@ export async function fetchEtnCandidates(
     };
     if (inRange(eff, periodStart, periodEnd)) {
       received.push({ ...base, group: "in_period" });
-    } else if (eff < periodStart && !submitted) {
+    } else if (eff < periodStart && !submitted && inEarlierWindow(eff)) {
       received.push({ ...base, group: "earlier_unsubmitted" });
     }
   }
+
+  // Náhled řadí vzestupně podle efektivního data (sloupec datum). Pořadí v rámci
+  // každé skupiny vyplyne z toho, že skupiny jsou filtrované podmnožiny tohoto
+  // seřazeného pole (ISO datum → lexikografické řazení = chronologické).
+  const byDate = (a: EtnCandidateRow, b: EtnCandidateRow) =>
+    a.effective_date.localeCompare(b.effective_date);
+  issued.sort(byDate);
+  received.sort(byDate);
 
   return { issued, received };
 }

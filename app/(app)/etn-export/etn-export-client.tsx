@@ -700,6 +700,7 @@ function InvoiceGroup({
                 />
                 <GroupRows
                   heading="Dříve neodevzdané (nikdy v exportu)"
+                  description="Faktury, které vznikly po zavedení ETN exportu a dosud se do žádného nedostaly. Starší doklady z doby před zavedením systému se tu záměrně nenabízí."
                   tone="amber"
                   rows={earlier}
                   kind={kind}
@@ -728,6 +729,7 @@ function InvoiceGroup({
 
 function GroupRows({
   heading,
+  description,
   tone,
   rows,
   kind,
@@ -736,6 +738,7 @@ function GroupRows({
   showBadge,
 }: {
   heading: string;
+  description?: string;
   tone: "normal" | "amber" | "muted";
   rows: PreviewRow[];
   kind: "issued" | "received";
@@ -758,6 +761,11 @@ function GroupRows({
           className="py-1.5 text-xs font-medium uppercase tracking-wide"
         >
           {heading} ({rows.length})
+          {description ? (
+            <span className="block mt-0.5 font-normal normal-case tracking-normal text-[11px] text-amber-800/80">
+              {description}
+            </span>
+          ) : null}
         </TableCell>
       </TableRow>
       {rows.map((r) => (
