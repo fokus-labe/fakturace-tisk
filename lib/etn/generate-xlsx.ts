@@ -16,6 +16,8 @@ export interface EtnIssuedInvoice {
   amount_no_vat: number;
   payment_method: "fakturace" | "hotovost" | "karta" | "QR";
   short_description: string | null;
+  /** Vznikla z vyúčtování (má settlement_id) — pak popis tržby = short_description. */
+  from_settlement: boolean;
   client_name: string;
   external_invoice_number: string | null;
   variable_symbol: string | null;
@@ -93,6 +95,13 @@ function applyBorderRange(
       sheet.getCell(r, c).border = thinBorder;
     }
   }
+}
+
+// Seřaď vzestupně podle efektivního data (stejné, které se vypisuje do sloupce
+// datum). Náklady i tržby musí jít v jednom pořadí; u tržeb je efektivní datum
+// invoice_issued_at || issued_at, takže pořadí z DB (podle issued_at) nestačí.
+function sortByDate<T extends { issued_at: Date }>(arr: T[]): T[] {
+  return arr.slice().sort((a, b) => a.issued_at.getTime() - b.issued_at.getTime());
 }
 
 export async function generateEtnXlsx(
@@ -201,7 +210,7 @@ export async function generateEtnXlsx(
   // ============================================================
   // ŘÁDKY 6-41 — DATA NÁKLADŮ (fixní 36-row band)
   // ============================================================
-  const receivedSlice = input.receivedInvoices.slice(0, NAKLADY_MAX);
+  const receivedSlice = sortByDate(input.receivedInvoices).slice(0, NAKLADY_MAX);
 
   receivedSlice.forEach((inv, idx) => {
     const r = NAKLADY_DATA_START + idx;
@@ -335,14 +344,17 @@ export async function generateEtnXlsx(
   // ============================================================
   // ŘÁDKY 47-58 — DATA TRŽEB (fixní 12-row band)
   // ============================================================
-  const issuedSlice = input.issuedInvoices.slice(0, TRZBY_MAX);
+  const issuedSlice = sortByDate(input.issuedInvoices).slice(0, TRZBY_MAX);
 
   // Pomocná funkce na D-formuli (auto-dopočet hotovosti)
   const dFormulaFor = (r: number) =>
     `IF(B${r}-E${r}-F${r}-G${r}=0,0,B${r}-E${r}-F${r}-G${r})`;
 
-  // FA prefix helper
+  // Stručný popis tržby (sloupec H).
   const faLabel = (inv: EtnIssuedInvoice): string => {
+    // Tržba z vyúčtování nese stejný popis jako náklad dvojice („SP <číslo>" /
+    // „ZS <číslo>"), ne jen název poskytovatele — jinak nejde dvojici spárovat.
+    if (inv.from_settlement && inv.short_description) return inv.short_description;
     const num = inv.external_invoice_number ?? inv.variable_symbol;
     if (num) return `FA ${num}`;
     return inv.client_name;

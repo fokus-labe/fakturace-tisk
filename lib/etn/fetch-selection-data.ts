@@ -70,7 +70,7 @@ export async function fetchEtnCandidates(
       supabase
         .from("invoice_requests")
         .select(
-          "id, issued_at, invoice_issued_at, status, payment_method, short_description, external_invoice_number, variable_symbol, etn_export_id, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate), etn_export:etn_exports(period_start, period_end)",
+          "id, issued_at, invoice_issued_at, status, payment_method, short_description, external_invoice_number, variable_symbol, settlement_id, etn_export_id, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate), settlement:settlements(gross_amount), etn_export:etn_exports(period_start, period_end)",
         )
         .eq("venue_id", venueId)
         .in("status", ["invoice_issued", "archived"])
@@ -187,7 +187,7 @@ export interface EtnInvoicesByIds {
 }
 
 const ISSUED_SELECT =
-  "id, issued_at, invoice_issued_at, status, payment_method, short_description, external_invoice_number, variable_symbol, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate)";
+  "id, issued_at, invoice_issued_at, status, payment_method, short_description, external_invoice_number, variable_symbol, settlement_id, client:clients(name), items:invoice_items(quantity, unit_price_no_vat, vat_rate), settlement:settlements(gross_amount)";
 const RECEIVED_SELECT =
   "id, issued_at, payment_method, amount_total, amount_no_vat, description, supplier_invoice_number, pdf_url, supplier:suppliers(name)";
 

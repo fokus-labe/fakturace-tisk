@@ -18,6 +18,13 @@ function embeddedName(rel: unknown): string {
   return (v as { name?: string } | null)?.name ?? "";
 }
 
+/** Hrubá částka z navázaného settlementu (přesně jak je na výpisu), nebo null. */
+function embeddedGross(rel: unknown): number | null {
+  const v = Array.isArray(rel) ? rel[0] : rel;
+  const g = (v as { gross_amount?: number | string } | null)?.gross_amount;
+  return g == null ? null : Number(g);
+}
+
 /** Efektivní datum vydané faktury: invoice_issued_at || issued_at (YYYY-MM-DD). */
 export function issuedEffectiveDate(row: {
   invoice_issued_at: string | null;
@@ -35,6 +42,8 @@ export interface IssuedRow {
   short_description: string | null;
   external_invoice_number: string | null;
   variable_symbol: string | null;
+  settlement_id?: string | null;
+  settlement?: unknown;
   client?: unknown;
   items?: Array<{
     quantity: number | string;
@@ -72,7 +81,24 @@ export function issuedAmounts(row: IssuedRow): {
 }
 
 export function mapIssuedRow(row: IssuedRow): EtnIssuedInvoice {
-  const { noVat, withVat } = issuedAmounts(row);
+  const fromSettlement = !!row.settlement_id;
+  const settlementGross = fromSettlement ? embeddedGross(row.settlement) : null;
+
+  let noVat: number;
+  let withVat: number;
+  if (settlementGross != null) {
+    // Tržby z vyúčtování: hrubou částku ber přesně z výpisu
+    // (settlements.gross_amount) a částku bez DPH z ní dopočítej — NE naopak.
+    // Zpětný součin (bez DPH × 1,21) ztrácí haléř (674,00 → 673,99), protože
+    // 674,00 nelze vyjádřit jako dvoudesetinná částka × 1,21.
+    withVat = round2(settlementGross);
+    const vatRate = Number(row.items?.[0]?.vat_rate ?? 21);
+    noVat = round2(withVat / (1 + vatRate / 100));
+  } else {
+    // Běžná vydaná faktura: položky jsou zdroj pravdy, dnešní výpočet je v pořádku.
+    ({ noVat, withVat } = issuedAmounts(row));
+  }
+
   return {
     issued_at: new Date(issuedEffectiveDate(row)),
     amount_with_vat: withVat,
@@ -83,6 +109,7 @@ export function mapIssuedRow(row: IssuedRow): EtnIssuedInvoice {
       | "karta"
       | "QR",
     short_description: row.short_description ?? null,
+    from_settlement: fromSettlement,
     client_name: embeddedName(row.client),
     external_invoice_number: row.external_invoice_number ?? null,
     variable_symbol: row.variable_symbol ?? null,
